@@ -5,7 +5,7 @@ defmodule Amenity.Bible do
 
   import Ecto.Query, warn: false
   alias Amenity.Repo
-  alias Amenity.Bible.ChapterRead
+  alias Amenity.Bible.{ChapterRead, Annotation}
 
   @bolls_api_base "https://bolls.life"
 
@@ -117,5 +117,84 @@ defmodule Amenity.Bible do
       %{name: "Numbers", abbr: "Num", chapters: 36},
       %{name: "Deuteronomy", abbr: "Deut", chapters: 34}
     ]
+  end
+
+  ## Annotations
+
+  @doc """
+  Creates an annotation for a specific verse.
+  """
+  def create_annotation(attrs) do
+    %Annotation{}
+    |> Annotation.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Updates an annotation.
+  """
+  def update_annotation(%Annotation{} = annotation, attrs) do
+    annotation
+    |> Annotation.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Deletes an annotation.
+  """
+  def delete_annotation(%Annotation{} = annotation) do
+    Repo.delete(annotation)
+  end
+
+  @doc """
+  Gets a single annotation by ID.
+  """
+  def get_annotation!(id), do: Repo.get!(Annotation, id)
+
+  @doc """
+  Lists all annotations for a user in a specific chapter.
+  """
+  def list_chapter_annotations(user_id, book, chapter) do
+    from(a in Annotation,
+      where: a.user_id == ^user_id and a.book == ^book and a.chapter == ^chapter,
+      order_by: [asc: a.verse]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets annotation for a specific verse (if exists).
+  """
+  def get_verse_annotation(user_id, book, chapter, verse) do
+    Repo.get_by(Annotation, user_id: user_id, book: book, chapter: chapter, verse: verse)
+  end
+
+  @doc """
+  Lists all annotations for a specific verse.
+  """
+  def list_verse_annotations(user_id, book, chapter, verse) do
+    from(a in Annotation,
+      where: a.user_id == ^user_id and a.book == ^book and a.chapter == ^chapter and a.verse == ^verse,
+      order_by: [desc: a.inserted_at]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Lists all annotations for a user across all books.
+  """
+  def list_user_annotations(user_id) do
+    from(a in Annotation,
+      where: a.user_id == ^user_id,
+      order_by: [desc: a.updated_at]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking annotation changes.
+  """
+  def change_annotation(%Annotation{} = annotation, attrs \\ %{}) do
+    Annotation.changeset(annotation, attrs)
   end
 end

@@ -9,7 +9,6 @@ defmodule AmenityWeb.BibleLive.Index do
       socket
       |> assign(:books, [])
       |> assign(:loading, true)
-      |> assign(:search, "")
       |> assign(:chapter_reads, %{})
 
     if connected?(socket) do
@@ -40,26 +39,19 @@ defmodule AmenityWeb.BibleLive.Index do
      |> assign(:loading, false)}
   end
 
-  @impl true
-  def handle_event("search", %{"search" => search}, socket) do
-    {:noreply, assign(socket, :search, search)}
-  end
-
-  defp filtered_books(books, search) do
-    if search == "" do
-      books
-    else
-      search_lower = String.downcase(search)
-
-      Enum.filter(books, fn book ->
-        String.contains?(String.downcase(book.name), search_lower) or
-          String.contains?(String.downcase(book.abbr), search_lower)
-      end)
-    end
-  end
-
   defp chapter_read?(chapter_reads, book, chapter) do
     Map.has_key?(chapter_reads, "#{book}_#{chapter}")
+  end
+
+  defp book_icon(book_name) do
+    case book_name do
+      "Genesis" -> "🌍"      # Creation/Earth
+      "Exodus" -> "⚡"       # Plagues/Power
+      "Leviticus" -> "🕊️"   # Sacrifice/Holiness
+      "Numbers" -> "🏕️"     # Wilderness/Journey
+      "Deuteronomy" -> "📜"  # Law/Covenant
+      _ -> "📚"
+    end
   end
 
   @impl true
@@ -69,24 +61,10 @@ defmodule AmenityWeb.BibleLive.Index do
       <div class="max-w-7xl mx-auto px-4 py-8">
         <!-- Header -->
         <div class="text-center mb-12">
-          <h1 class="text-6xl font-bold mb-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-            📖 Bible Reader
+          <h1 class="text-6xl font-bold mb-4">
+            📖 <span class="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">Bible Reader</span>
           </h1>
           <p class="text-xl text-gray-600">Choose a book and chapter to start reading!</p>
-        </div>
-        
-    <!-- Search bar -->
-        <div class="max-w-2xl mx-auto mb-8">
-          <form phx-change="search" class="relative">
-            <input
-              type="text"
-              name="search"
-              value={@search}
-              placeholder="🔍 Search for a book..."
-              class="input input-bordered input-lg w-full bg-white shadow-lg rounded-full pl-6 pr-12 text-lg"
-              phx-debounce="300"
-            />
-          </form>
         </div>
         
     <!-- Loading state -->
@@ -99,11 +77,11 @@ defmodule AmenityWeb.BibleLive.Index do
     <!-- Books grid -->
         <div :if={!@loading} class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div
-            :for={book <- filtered_books(@books, @search)}
-            class="bg-white rounded-3xl p-6 shadow-lg hover:shadow-2xl transition-all transform hover:scale-105 border-t-4 border-purple-400"
+            :for={book <- @books}
+            class="bg-white rounded-3xl p-6 shadow-lg hover:shadow-2xl transition-all transform hover:scale-105 border-t-4 border-gray-300"
           >
             <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <span class="text-3xl">📚</span>
+              <span class="text-3xl">{book_icon(book.name)}</span>
               {book.name}
             </h2>
 
@@ -127,11 +105,6 @@ defmodule AmenityWeb.BibleLive.Index do
               </.link>
             </div>
           </div>
-        </div>
-        
-    <!-- Empty state -->
-        <div :if={!@loading and filtered_books(@books, @search) == []} class="text-center py-20">
-          <p class="text-2xl text-gray-600">No books found matching "{@search}"</p>
         </div>
       </div>
     </div>

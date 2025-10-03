@@ -66,20 +66,20 @@ defmodule Amenity.Accounts.UserToken do
   end
 
   @doc """
-  Builds a token and its hash to be delivered to the user's email.
+  Builds a token and its hash to be delivered to the user.
 
-  The non-hashed token is sent to the user email while the
+  The non-hashed token is sent to the user while the
   hashed part is stored in the database. The original token cannot be reconstructed,
   which means anyone with read-only access to the database cannot directly use
   the token in the application to gain access. Furthermore, if the user changes
-  their email in the system, the tokens sent to the previous email are no longer
+  their username in the system, the tokens sent to the previous username are no longer
   valid.
 
   Users can easily adapt the existing code to provide other types of delivery methods,
   for example, by phone numbers.
   """
   def build_email_token(user, context) do
-    build_hashed_token(user, context, user.email)
+    build_hashed_token(user, context, user.username)
   end
 
   defp build_hashed_token(user, context, sent_to) do
@@ -113,7 +113,7 @@ defmodule Amenity.Accounts.UserToken do
           from token in by_token_and_context_query(hashed_token, "login"),
             join: user in assoc(token, :user),
             where: token.inserted_at > ago(^@magic_link_validity_in_minutes, "minute"),
-            where: token.sent_to == user.email,
+            where: token.sent_to == user.username,
             select: {user, token}
 
         {:ok, query}

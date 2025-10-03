@@ -58,6 +58,15 @@ defmodule AmenityWeb.Router do
       # Bible reader routes
       live "/bible", BibleLive.Index, :index
       live "/bible/:book/:chapter", BibleLive.Reader, :show
+      
+      # Friends routes
+      live "/friends", FriendsLive.Index, :index
+      
+      # Social routes
+      live "/social", SocialLive.Index, :index
+      
+      # Study routes
+      live "/study", StudyLive.Index, :index
     end
 
     post "/users/update-password", UserSessionController, :update_password

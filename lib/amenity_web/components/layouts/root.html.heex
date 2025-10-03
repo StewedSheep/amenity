@@ -31,26 +31,42 @@
     </script>
   </head>
   <body>
-    <ul class="menu menu-horizontal w-full relative z-10 flex items-center gap-4 px-4 sm:px-6 lg:px-8 justify-end">
-      <%= if @current_scope do %>
+    <div class="w-full relative z-10 flex items-center gap-4 px-4 sm:px-6 lg:px-8">
+      <div class="flex-1"></div>
+      <ul class="menu menu-horizontal flex items-center gap-4">
+        <%= if @current_scope do %>
+          <li>
+            <.link href={~p"/bible"} class="font-semibold">Bible</.link>
+          </li>
+          <li>
+            <.link href={~p"/social"} class="font-semibold">Social</.link>
+          </li>
+          <li>
+            <.link href={~p"/study"} class="font-semibold">Study</.link>
+          </li>
+        <% end %>
+      </ul>
+      <ul class="menu menu-horizontal flex-1 flex items-center gap-4 justify-end">
         <li>
-          {@current_scope.user.email}
+          <.link href={~p"/friends"} class="font-semibold">Friends</.link>
         </li>
-        <li>
-          <.link href={~p"/users/settings"}>Settings</.link>
-        </li>
-        <li>
-          <.link href={~p"/users/log-out"} method="delete">Log out</.link>
-        </li>
-      <% else %>
-        <li>
-          <.link href={~p"/users/register"}>Register</.link>
-        </li>
-        <li>
-          <.link href={~p"/users/log-in"}>Log in</.link>
-        </li>
-      <% end %>
-    </ul>
+        <%= if @current_scope do %>
+          <li>
+            {@current_scope.user.username}
+          </li>
+          <li>
+            <.link href={~p"/users/log-out"} method="delete">Log out</.link>
+          </li>
+        <% else %>
+          <li>
+            <.link href={~p"/users/register"}>Register</.link>
+          </li>
+          <li>
+            <.link href={~p"/users/log-in"}>Log in</.link>
+          </li>
+        <% end %>
+      </ul>
+    </div>
     {@inner_content}
   </body>
 </html>

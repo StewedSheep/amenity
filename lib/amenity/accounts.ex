@@ -6,41 +6,41 @@ defmodule Amenity.Accounts do
   import Ecto.Query, warn: false
   alias Amenity.Repo
 
-  alias Amenity.Accounts.{User, UserToken, UserNotifier}
+  alias Amenity.Accounts.{User, UserToken, Friendship}
 
   ## Database getters
 
   @doc """
-  Gets a user by email.
+  Gets a user by username.
 
   ## Examples
 
-      iex> get_user_by_email("foo@example.com")
+      iex> get_user_by_username("john_doe")
       %User{}
 
-      iex> get_user_by_email("unknown@example.com")
+      iex> get_user_by_username("unknown")
       nil
 
   """
-  def get_user_by_email(email) when is_binary(email) do
-    Repo.get_by(User, email: email)
+  def get_user_by_username(username) when is_binary(username) do
+    Repo.get_by(User, username: username)
   end
 
   @doc """
-  Gets a user by email and password.
+  Gets a user by username and password.
 
   ## Examples
 
-      iex> get_user_by_email_and_password("foo@example.com", "correct_password")
+      iex> get_user_by_username_and_password("john_doe", "correct_password")
       %User{}
 
-      iex> get_user_by_email_and_password("foo@example.com", "invalid_password")
+      iex> get_user_by_username_and_password("john_doe", "invalid_password")
       nil
 
   """
-  def get_user_by_email_and_password(email, password)
-      when is_binary(email) and is_binary(password) do
-    user = Repo.get_by(User, email: email)
+  def get_user_by_username_and_password(username, password)
+      when is_binary(username) and is_binary(password) do
+    user = Repo.get_by(User, username: username)
     if User.valid_password?(user, password), do: user
   end
 
@@ -76,7 +76,9 @@ defmodule Amenity.Accounts do
   """
   def register_user(attrs) do
     %User{}
-    |> User.email_changeset(attrs)
+    |> User.username_changeset(attrs)
+    |> User.password_changeset(attrs)
+    |> Ecto.Changeset.put_change(:confirmed_at, DateTime.utc_now(:second))
     |> Repo.insert()
   end
 
@@ -97,32 +99,32 @@ defmodule Amenity.Accounts do
   def sudo_mode?(_user, _minutes), do: false
 
   @doc """
-  Returns an `%Ecto.Changeset{}` for changing the user email.
+  Returns an `%Ecto.Changeset{}` for changing the user username.
 
-  See `Amenity.Accounts.User.email_changeset/3` for a list of supported options.
+  See `Amenity.Accounts.User.username_changeset/3` for a list of supported options.
 
   ## Examples
 
-      iex> change_user_email(user)
+      iex> change_user_username(user)
       %Ecto.Changeset{data: %User{}}
 
   """
-  def change_user_email(user, attrs \\ %{}, opts \\ []) do
-    User.email_changeset(user, attrs, opts)
+  def change_user_username(user, attrs \\ %{}, opts \\ []) do
+    User.username_changeset(user, attrs, opts)
   end
 
   @doc """
-  Updates the user email using the given token.
+  Updates the user username using the given token.
 
-  If the token matches, the user email is updated and the token is deleted.
+  If the token matches, the user username is updated and the token is deleted.
   """
-  def update_user_email(user, token) do
-    context = "change:#{user.email}"
+  def update_user_username_with_token(user, token) do
+    context = "change:#{user.username}"
 
     Repo.transact(fn ->
       with {:ok, query} <- UserToken.verify_change_email_token_query(token, context),
-           %UserToken{sent_to: email} <- Repo.one(query),
-           {:ok, user} <- Repo.update(User.email_changeset(user, %{email: email})),
+           %UserToken{sent_to: username} <- Repo.one(query),
+           {:ok, user} <- Repo.update(User.username_changeset(user, %{username: username})),
            {_count, _result} <-
              Repo.delete_all(from(UserToken, where: [user_id: ^user.id, context: ^context])) do
         {:ok, user}
@@ -293,5 +295,165 @@ defmodule Amenity.Accounts do
         {:ok, {user, tokens_to_expire}}
       end
     end)
+  end
+
+  ## Friendships
+
+  @doc """
+  Sends a friend request from one user to another.
+  """
+  def send_friend_request(user_id, friend_id) do
+    %Friendship{}
+    |> Friendship.changeset(%{
+      user_id: user_id,
+      friend_id: friend_id,
+      status: "pending"
+    })
+    |> Repo.insert()
+  end
+
+  @doc """
+  Accepts a friend request.
+  """
+  def accept_friend_request(user_id, friend_id) do
+    friendship = Repo.get_by(Friendship, user_id: friend_id, friend_id: user_id, status: "pending")
+    
+    if friendship do
+      friendship
+      |> Friendship.changeset(%{status: "accepted"})
+      |> Repo.update()
+    else
+      {:error, :not_found}
+    end
+  end
+
+  @doc """
+  Rejects a friend request.
+  """
+  def reject_friend_request(user_id, friend_id) do
+    friendship = Repo.get_by(Friendship, user_id: friend_id, friend_id: user_id, status: "pending")
+    
+    if friendship do
+      friendship
+      |> Friendship.changeset(%{status: "rejected"})
+      |> Repo.update()
+    else
+      {:error, :not_found}
+    end
+  end
+
+  @doc """
+  Blocks a user.
+  """
+  def block_user(user_id, blocked_user_id) do
+    # Delete any existing friendship
+    Repo.delete_all(
+      from f in Friendship,
+      where: (f.user_id == ^user_id and f.friend_id == ^blocked_user_id) or
+             (f.user_id == ^blocked_user_id and f.friend_id == ^user_id)
+    )
+
+    # Create block entry
+    %Friendship{}
+    |> Friendship.changeset(%{
+      user_id: user_id,
+      friend_id: blocked_user_id,
+      status: "blocked"
+    })
+    |> Repo.insert()
+  end
+
+  @doc """
+  Removes a friendship (unfriend).
+  """
+  def remove_friendship(user_id, friend_id) do
+    Repo.delete_all(
+      from f in Friendship,
+      where: ((f.user_id == ^user_id and f.friend_id == ^friend_id) or
+              (f.user_id == ^friend_id and f.friend_id == ^user_id)) and
+             f.status == "accepted"
+    )
+    
+    :ok
+  end
+
+  @doc """
+  Gets all friends for a user (accepted friendships).
+  """
+  def get_friends(user_id) do
+    from(f in Friendship,
+      where: (f.user_id == ^user_id or f.friend_id == ^user_id) and f.status == "accepted",
+      join: u in User,
+      on: (f.user_id == u.id and f.friend_id == ^user_id) or 
+          (f.friend_id == u.id and f.user_id == ^user_id),
+      select: u
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets pending friend requests received by a user.
+  """
+  def get_pending_requests(user_id) do
+    from(f in Friendship,
+      where: f.friend_id == ^user_id and f.status == "pending",
+      join: u in User, on: f.user_id == u.id,
+      select: {f, u},
+      order_by: [desc: f.inserted_at]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets pending friend requests sent by a user.
+  """
+  def get_sent_requests(user_id) do
+    from(f in Friendship,
+      where: f.user_id == ^user_id and f.status == "pending",
+      join: u in User, on: f.friend_id == u.id,
+      select: {f, u},
+      order_by: [desc: f.inserted_at]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Checks if two users are friends.
+  """
+  def are_friends?(user_id, friend_id) do
+    from(f in Friendship,
+      where: ((f.user_id == ^user_id and f.friend_id == ^friend_id) or
+              (f.user_id == ^friend_id and f.friend_id == ^user_id)) and
+             f.status == "accepted"
+    )
+    |> Repo.exists?()
+  end
+
+  @doc """
+  Gets the friendship status between two users.
+  Returns: nil, "pending", "accepted", "rejected", or "blocked"
+  """
+  def get_friendship_status(user_id, friend_id) do
+    friendship = from(f in Friendship,
+      where: (f.user_id == ^user_id and f.friend_id == ^friend_id) or
+             (f.user_id == ^friend_id and f.friend_id == ^user_id),
+      limit: 1
+    )
+    |> Repo.one()
+
+    if friendship, do: friendship.status, else: nil
+  end
+
+  @doc """
+  Searches for users by username (excluding current user).
+  """
+  def search_users(query, current_user_id) do
+    search_term = "%#{query}%"
+    
+    from(u in User,
+      where: u.id != ^current_user_id and ilike(u.username, ^search_term),
+      limit: 10
+    )
+    |> Repo.all()
   end
 end

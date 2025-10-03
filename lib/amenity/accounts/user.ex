@@ -3,54 +3,61 @@ defmodule Amenity.Accounts.User do
   import Ecto.Changeset
 
   schema "users" do
-    field :email, :string
+    field :username, :string
     field :password, :string, virtual: true, redact: true
     field :hashed_password, :string, redact: true
     field :confirmed_at, :utc_datetime
     field :authenticated_at, :utc_datetime, virtual: true
 
+    # Friendships
+    has_many :friendships, Amenity.Accounts.Friendship
+    has_many :friends, through: [:friendships, :friend]
+    
+    has_many :inverse_friendships, Amenity.Accounts.Friendship, foreign_key: :friend_id
+    has_many :inverse_friends, through: [:inverse_friendships, :user]
+
     timestamps(type: :utc_datetime)
   end
 
   @doc """
-  A user changeset for registering or changing the email.
+  A user changeset for registering or changing the username.
 
-  It requires the email to change otherwise an error is added.
+  It requires the username to change otherwise an error is added.
 
   ## Options
 
     * `:validate_unique` - Set to false if you don't want to validate the
-      uniqueness of the email, useful when displaying live validations.
+      uniqueness of the username, useful when displaying live validations.
       Defaults to `true`.
   """
-  def email_changeset(user, attrs, opts \\ []) do
+  def username_changeset(user, attrs, opts \\ []) do
     user
-    |> cast(attrs, [:email])
-    |> validate_email(opts)
+    |> cast(attrs, [:username])
+    |> validate_username(opts)
   end
 
-  defp validate_email(changeset, opts) do
+  defp validate_username(changeset, opts) do
     changeset =
       changeset
-      |> validate_required([:email])
-      |> validate_format(:email, ~r/^[^@,;\s]+@[^@,;\s]+$/,
-        message: "must have the @ sign and no spaces"
+      |> validate_required([:username])
+      |> validate_format(:username, ~r/^[a-zA-Z0-9_]+$/,
+        message: "must contain only letters, numbers, and underscores"
       )
-      |> validate_length(:email, max: 160)
+      |> validate_length(:username, min: 3, max: 30)
 
     if Keyword.get(opts, :validate_unique, true) do
       changeset
-      |> unsafe_validate_unique(:email, Amenity.Repo)
-      |> unique_constraint(:email)
-      |> validate_email_changed()
+      |> unsafe_validate_unique(:username, Amenity.Repo)
+      |> unique_constraint(:username)
+      |> validate_username_changed()
     else
       changeset
     end
   end
 
-  defp validate_email_changed(changeset) do
-    if get_field(changeset, :email) && get_change(changeset, :email) == nil do
-      add_error(changeset, :email, "did not change")
+  defp validate_username_changed(changeset) do
+    if get_field(changeset, :username) && get_change(changeset, :username) == nil do
+      add_error(changeset, :username, "did not change")
     else
       changeset
     end
