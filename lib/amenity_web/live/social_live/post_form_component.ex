@@ -37,7 +37,7 @@ defmodule AmenityWeb.SocialLive.PostFormComponent do
             <label class="label">
               <span class="label-text font-medium">Images (optional)</span>
             </label>
-            
+
             <div class="tabs tabs-boxed mb-4">
               <a class="tab tab-active">Upload</a>
               <a class="tab">Link URL</a>
@@ -68,13 +68,12 @@ defmodule AmenityWeb.SocialLive.PostFormComponent do
                   placeholder="Paste image URL (https://...)"
                   class="input input-bordered join-item flex-1"
                   value={@image_url}
-                  phx-change="update-image-url"
                   phx-target={@myself}
                   name="image_url"
                 />
                 <button
                   type="button"
-                  class="btn btn-primary join-item"
+                  class="btn join-item bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all"
                   phx-click="add-image-url"
                   phx-target={@myself}
                   disabled={@image_url == ""}
@@ -152,7 +151,7 @@ defmodule AmenityWeb.SocialLive.PostFormComponent do
             </button>
             <button
               type="submit"
-              class="btn btn-primary btn-sm gap-2"
+              class="btn btn-sm gap-2 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all"
             >
               <.icon name="hero-paper-airplane" class="w-4 h-4" />
               <%= if @action == :new, do: "Submit Topic", else: "Update Topic" %>
