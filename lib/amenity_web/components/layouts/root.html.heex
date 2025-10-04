@@ -52,7 +52,12 @@
         </li>
         <%= if @current_scope do %>
           <li>
-            {@current_scope.user.username}
+            <.link
+              href={~p"/users/profile"}
+              class="font-semibold hover:text-primary transition-colors"
+            >
+              {@current_scope.user.username}
+            </.link>
           </li>
           <li>
             <.link href={~p"/users/log-out"} method="delete">Log out</.link>

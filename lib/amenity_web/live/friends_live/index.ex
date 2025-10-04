@@ -7,7 +7,7 @@ defmodule AmenityWeb.FriendsLive.Index do
   @impl true
   def mount(_params, _session, socket) do
     user_id = socket.assigns.current_scope.user.id
-    
+
     socket =
       socket
       |> assign(:friends, Accounts.get_friends(user_id))
@@ -15,20 +15,21 @@ defmodule AmenityWeb.FriendsLive.Index do
       |> assign(:sent_requests, Accounts.get_sent_requests(user_id))
       |> assign(:search_query, "")
       |> assign(:search_results, [])
-    
+
     {:ok, socket}
   end
 
   @impl true
   def handle_event("search", %{"search" => query}, socket) do
     user_id = socket.assigns.current_scope.user.id
-    
-    results = if String.length(query) >= 2 do
-      Accounts.search_users(query, user_id)
-    else
-      []
-    end
-    
+
+    results =
+      if String.length(query) >= 2 do
+        Accounts.search_users(query, user_id)
+      else
+        []
+      end
+
     {:noreply,
      socket
      |> assign(:search_query, query)
@@ -38,7 +39,7 @@ defmodule AmenityWeb.FriendsLive.Index do
   def handle_event("send_request", %{"user_id" => friend_id}, socket) do
     user_id = socket.assigns.current_scope.user.id
     friend_id = String.to_integer(friend_id)
-    
+
     case Accounts.send_friend_request(user_id, friend_id) do
       {:ok, _friendship} ->
         {:noreply,
@@ -46,7 +47,7 @@ defmodule AmenityWeb.FriendsLive.Index do
          |> put_flash(:info, "Friend request sent!")
          |> assign(:sent_requests, Accounts.get_sent_requests(user_id))
          |> assign(:search_results, [])}
-      
+
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Could not send friend request")}
     end
@@ -55,7 +56,7 @@ defmodule AmenityWeb.FriendsLive.Index do
   def handle_event("accept_request", %{"user_id" => friend_id}, socket) do
     user_id = socket.assigns.current_scope.user.id
     friend_id = String.to_integer(friend_id)
-    
+
     case Accounts.accept_friend_request(user_id, friend_id) do
       {:ok, _friendship} ->
         {:noreply,
@@ -63,7 +64,7 @@ defmodule AmenityWeb.FriendsLive.Index do
          |> put_flash(:info, "Friend request accepted!")
          |> assign(:friends, Accounts.get_friends(user_id))
          |> assign(:pending_requests, Accounts.get_pending_requests(user_id))}
-      
+
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Could not accept request")}
     end
@@ -72,14 +73,14 @@ defmodule AmenityWeb.FriendsLive.Index do
   def handle_event("reject_request", %{"user_id" => friend_id}, socket) do
     user_id = socket.assigns.current_scope.user.id
     friend_id = String.to_integer(friend_id)
-    
+
     case Accounts.reject_friend_request(user_id, friend_id) do
       {:ok, _friendship} ->
         {:noreply,
          socket
          |> put_flash(:info, "Friend request rejected")
          |> assign(:pending_requests, Accounts.get_pending_requests(user_id))}
-      
+
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Could not reject request")}
     end
@@ -88,9 +89,9 @@ defmodule AmenityWeb.FriendsLive.Index do
   def handle_event("remove_friend", %{"user_id" => friend_id}, socket) do
     user_id = socket.assigns.current_scope.user.id
     friend_id = String.to_integer(friend_id)
-    
+
     Accounts.remove_friendship(user_id, friend_id)
-    
+
     {:noreply,
      socket
      |> put_flash(:info, "Friend removed")
@@ -100,13 +101,13 @@ defmodule AmenityWeb.FriendsLive.Index do
   def handle_event("cancel_request", %{"user_id" => friend_id}, socket) do
     user_id = socket.assigns.current_scope.user.id
     friend_id = String.to_integer(friend_id)
-    
+
     # Delete the pending friend request
     Amenity.Repo.delete_all(
       from f in Amenity.Accounts.Friendship,
-      where: f.user_id == ^user_id and f.friend_id == ^friend_id and f.status == "pending"
+        where: f.user_id == ^user_id and f.friend_id == ^friend_id and f.status == "pending"
     )
-    
+
     {:noreply,
      socket
      |> put_flash(:info, "Friend request cancelled")
@@ -132,8 +133,8 @@ defmodule AmenityWeb.FriendsLive.Index do
             👥 Friends
           </h1>
         </div>
-
-        <!-- Search Section -->
+        
+    <!-- Search Section -->
         <div class="bg-white rounded-3xl p-6 shadow-xl mb-8">
           <h2 class="text-2xl font-bold mb-4 text-gray-800">🔍 Find Friends</h2>
           <form phx-change="search" class="mb-4">
@@ -153,7 +154,7 @@ defmodule AmenityWeb.FriendsLive.Index do
               class="flex items-center justify-between p-4 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-all"
             >
               <div>
-                <p class="font-semibold text-gray-800">@<%= user.username %></p>
+                <p class="font-semibold text-gray-800">@{user.username}</p>
               </div>
               <%= cond do %>
                 <% already_friends?(@friends, user.id) -> %>
@@ -176,8 +177,8 @@ defmodule AmenityWeb.FriendsLive.Index do
             </div>
           </div>
         </div>
-
-        <!-- Pending Requests -->
+        
+    <!-- Pending Requests -->
         <div :if={@pending_requests != []} class="bg-white rounded-3xl p-6 shadow-xl mb-8">
           <h2 class="text-2xl font-bold mb-4 text-gray-800">📬 Friend Requests</h2>
           <div class="space-y-3">
@@ -186,7 +187,7 @@ defmodule AmenityWeb.FriendsLive.Index do
               class="flex items-center justify-between p-4 bg-yellow-50 rounded-2xl border-l-4 border-yellow-400"
             >
               <div>
-                <p class="font-semibold text-gray-800">@<%= user.username %></p>
+                <p class="font-semibold text-gray-800">@{user.username}</p>
               </div>
               <div class="flex gap-2">
                 <button
@@ -207,8 +208,8 @@ defmodule AmenityWeb.FriendsLive.Index do
             </div>
           </div>
         </div>
-
-        <!-- Sent Requests -->
+        
+    <!-- Sent Requests -->
         <div :if={@sent_requests != []} class="bg-white rounded-3xl p-6 shadow-xl mb-8">
           <h2 class="text-2xl font-bold mb-4 text-gray-800">📤 Sent Requests</h2>
           <div class="space-y-3">
@@ -217,7 +218,7 @@ defmodule AmenityWeb.FriendsLive.Index do
               class="flex items-center justify-between p-4 bg-blue-50 rounded-2xl border-l-4 border-blue-400"
             >
               <div>
-                <p class="font-semibold text-gray-800">@<%= user.username %></p>
+                <p class="font-semibold text-gray-800">@{user.username}</p>
                 <p class="text-sm text-gray-500">Pending...</p>
               </div>
               <button
@@ -230,11 +231,11 @@ defmodule AmenityWeb.FriendsLive.Index do
             </div>
           </div>
         </div>
-
-        <!-- Friends List -->
+        
+    <!-- Friends List -->
         <div class="bg-white rounded-3xl p-6 shadow-xl">
           <h2 class="text-2xl font-bold mb-4 text-gray-800">✨ My Friends</h2>
-          
+
           <div :if={@friends == []} class="text-center py-12">
             <p class="text-xl text-gray-500">No friends yet. Start searching!</p>
           </div>
@@ -245,7 +246,7 @@ defmodule AmenityWeb.FriendsLive.Index do
               class="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl hover:shadow-lg transition-all"
             >
               <div>
-                <p class="font-semibold text-gray-800">@<%= friend.username %></p>
+                <p class="font-semibold text-gray-800">@{friend.username}</p>
               </div>
               <button
                 phx-click="remove_friend"

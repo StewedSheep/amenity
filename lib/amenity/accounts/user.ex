@@ -8,11 +8,12 @@ defmodule Amenity.Accounts.User do
     field :hashed_password, :string, redact: true
     field :confirmed_at, :utc_datetime
     field :authenticated_at, :utc_datetime, virtual: true
+    field :profile_picture_url, :string
 
     # Friendships
     has_many :friendships, Amenity.Accounts.Friendship
     has_many :friends, through: [:friendships, :friend]
-    
+
     has_many :inverse_friendships, Amenity.Accounts.Friendship, foreign_key: :friend_id
     has_many :inverse_friends, through: [:inverse_friendships, :user]
 
@@ -119,6 +120,18 @@ defmodule Amenity.Accounts.User do
   def confirm_changeset(user) do
     now = DateTime.utc_now(:second)
     change(user, confirmed_at: now)
+  end
+
+  @doc """
+  A user changeset for updating the profile picture URL.
+  """
+  def profile_picture_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:profile_picture_url])
+    |> validate_length(:profile_picture_url, max: 500)
+    |> validate_format(:profile_picture_url, ~r/^https?:\/\/.+/,
+      message: "must be a valid URL starting with http:// or https://"
+    )
   end
 
   @doc """

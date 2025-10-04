@@ -26,7 +26,7 @@ defmodule Amenity.Bible.ChapterRead do
   def mark_as_read(chapter_read) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
     updated_reads = [now | chapter_read.last_read]
-    
+
     change(chapter_read, last_read: updated_reads)
   end
 end

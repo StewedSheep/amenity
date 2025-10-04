@@ -150,6 +150,37 @@ defmodule Amenity.Accounts do
   end
 
   @doc """
+  Returns an `%Ecto.Changeset{}` for changing the user profile picture.
+
+  ## Examples
+
+      iex> change_user_profile_picture(user)
+      %Ecto.Changeset{data: %User{}}
+
+  """
+  def change_user_profile_picture(user, attrs \\ %{}) do
+    User.profile_picture_changeset(user, attrs)
+  end
+
+  @doc """
+  Updates the user profile picture.
+
+  ## Examples
+
+      iex> update_user_profile_picture(user, %{profile_picture_url: "https://..."})
+      {:ok, %User{}}
+
+      iex> update_user_profile_picture(user, %{profile_picture_url: "invalid"})
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def update_user_profile_picture(user, attrs) do
+    user
+    |> User.profile_picture_changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
   Updates the user password.
 
   Returns a tuple with the updated user, as well as a list of expired tokens.
@@ -316,8 +347,9 @@ defmodule Amenity.Accounts do
   Accepts a friend request.
   """
   def accept_friend_request(user_id, friend_id) do
-    friendship = Repo.get_by(Friendship, user_id: friend_id, friend_id: user_id, status: "pending")
-    
+    friendship =
+      Repo.get_by(Friendship, user_id: friend_id, friend_id: user_id, status: "pending")
+
     if friendship do
       friendship
       |> Friendship.changeset(%{status: "accepted"})
@@ -331,8 +363,9 @@ defmodule Amenity.Accounts do
   Rejects a friend request.
   """
   def reject_friend_request(user_id, friend_id) do
-    friendship = Repo.get_by(Friendship, user_id: friend_id, friend_id: user_id, status: "pending")
-    
+    friendship =
+      Repo.get_by(Friendship, user_id: friend_id, friend_id: user_id, status: "pending")
+
     if friendship do
       friendship
       |> Friendship.changeset(%{status: "rejected"})
@@ -349,8 +382,9 @@ defmodule Amenity.Accounts do
     # Delete any existing friendship
     Repo.delete_all(
       from f in Friendship,
-      where: (f.user_id == ^user_id and f.friend_id == ^blocked_user_id) or
-             (f.user_id == ^blocked_user_id and f.friend_id == ^user_id)
+        where:
+          (f.user_id == ^user_id and f.friend_id == ^blocked_user_id) or
+            (f.user_id == ^blocked_user_id and f.friend_id == ^user_id)
     )
 
     # Create block entry
@@ -369,11 +403,12 @@ defmodule Amenity.Accounts do
   def remove_friendship(user_id, friend_id) do
     Repo.delete_all(
       from f in Friendship,
-      where: ((f.user_id == ^user_id and f.friend_id == ^friend_id) or
-              (f.user_id == ^friend_id and f.friend_id == ^user_id)) and
-             f.status == "accepted"
+        where:
+          ((f.user_id == ^user_id and f.friend_id == ^friend_id) or
+             (f.user_id == ^friend_id and f.friend_id == ^user_id)) and
+            f.status == "accepted"
     )
-    
+
     :ok
   end
 
@@ -384,7 +419,8 @@ defmodule Amenity.Accounts do
     from(f in Friendship,
       where: (f.user_id == ^user_id or f.friend_id == ^user_id) and f.status == "accepted",
       join: u in User,
-      on: (f.user_id == u.id and f.friend_id == ^user_id) or 
+      on:
+        (f.user_id == u.id and f.friend_id == ^user_id) or
           (f.friend_id == u.id and f.user_id == ^user_id),
       select: u
     )
@@ -397,7 +433,8 @@ defmodule Amenity.Accounts do
   def get_pending_requests(user_id) do
     from(f in Friendship,
       where: f.friend_id == ^user_id and f.status == "pending",
-      join: u in User, on: f.user_id == u.id,
+      join: u in User,
+      on: f.user_id == u.id,
       select: {f, u},
       order_by: [desc: f.inserted_at]
     )
@@ -410,7 +447,8 @@ defmodule Amenity.Accounts do
   def get_sent_requests(user_id) do
     from(f in Friendship,
       where: f.user_id == ^user_id and f.status == "pending",
-      join: u in User, on: f.friend_id == u.id,
+      join: u in User,
+      on: f.friend_id == u.id,
       select: {f, u},
       order_by: [desc: f.inserted_at]
     )
@@ -422,9 +460,10 @@ defmodule Amenity.Accounts do
   """
   def are_friends?(user_id, friend_id) do
     from(f in Friendship,
-      where: ((f.user_id == ^user_id and f.friend_id == ^friend_id) or
-              (f.user_id == ^friend_id and f.friend_id == ^user_id)) and
-             f.status == "accepted"
+      where:
+        ((f.user_id == ^user_id and f.friend_id == ^friend_id) or
+           (f.user_id == ^friend_id and f.friend_id == ^user_id)) and
+          f.status == "accepted"
     )
     |> Repo.exists?()
   end
@@ -434,12 +473,14 @@ defmodule Amenity.Accounts do
   Returns: nil, "pending", "accepted", "rejected", or "blocked"
   """
   def get_friendship_status(user_id, friend_id) do
-    friendship = from(f in Friendship,
-      where: (f.user_id == ^user_id and f.friend_id == ^friend_id) or
-             (f.user_id == ^friend_id and f.friend_id == ^user_id),
-      limit: 1
-    )
-    |> Repo.one()
+    friendship =
+      from(f in Friendship,
+        where:
+          (f.user_id == ^user_id and f.friend_id == ^friend_id) or
+            (f.user_id == ^friend_id and f.friend_id == ^user_id),
+        limit: 1
+      )
+      |> Repo.one()
 
     if friendship, do: friendship.status, else: nil
   end
@@ -449,7 +490,7 @@ defmodule Amenity.Accounts do
   """
   def search_users(query, current_user_id) do
     search_term = "%#{query}%"
-    
+
     from(u in User,
       where: u.id != ^current_user_id and ilike(u.username, ^search_term),
       limit: 10

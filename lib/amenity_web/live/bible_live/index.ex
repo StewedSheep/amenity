@@ -45,11 +45,16 @@ defmodule AmenityWeb.BibleLive.Index do
 
   defp book_icon(book_name) do
     case book_name do
-      "Genesis" -> "🌍"      # Creation/Earth
-      "Exodus" -> "⚡"       # Plagues/Power
-      "Leviticus" -> "🕊️"   # Sacrifice/Holiness
-      "Numbers" -> "🏕️"     # Wilderness/Journey
-      "Deuteronomy" -> "📜"  # Law/Covenant
+      # Creation/Earth
+      "Genesis" -> "🌍"
+      # Plagues/Power
+      "Exodus" -> "⚡"
+      # Sacrifice/Holiness
+      "Leviticus" -> "🕊️"
+      # Wilderness/Journey
+      "Numbers" -> "🏕️"
+      # Law/Covenant
+      "Deuteronomy" -> "📜"
       _ -> "📚"
     end
   end
@@ -62,7 +67,10 @@ defmodule AmenityWeb.BibleLive.Index do
         <!-- Header -->
         <div class="text-center mb-12">
           <h1 class="text-6xl font-bold mb-4">
-            📖 <span class="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">Bible Reader</span>
+            📖
+            <span class="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+              Bible Reader
+            </span>
           </h1>
           <p class="text-xl text-gray-600">Choose a book and chapter to start reading!</p>
         </div>

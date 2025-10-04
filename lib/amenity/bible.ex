@@ -15,15 +15,15 @@ defmodule Amenity.Bible do
   """
   def fetch_chapter(book, chapter, translation \\ "KJV") do
     url = "#{@bolls_api_base}/get-text/#{translation}/#{book}/#{chapter}/"
-    
+
     case Req.get(url) do
       {:ok, %{status: 200, body: body}} ->
         verses = parse_chapter_response(body)
         {:ok, %{book: book, chapter: chapter, translation: translation, verses: verses}}
-      
+
       {:ok, %{status: status}} ->
         {:error, "API returned status #{status}"}
-      
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -41,6 +41,7 @@ defmodule Amenity.Bible do
   defp parse_chapter_response(body) when is_list(body) do
     Enum.map(body, fn verse ->
       text = clean_verse_text(verse["text"] || "")
+
       %{
         verse: verse["verse"],
         text: text
@@ -72,7 +73,7 @@ defmodule Amenity.Bible do
         %ChapterRead{}
         |> ChapterRead.changeset(%{user_id: user_id, book: book, chapter: chapter})
         |> Repo.insert()
-      
+
       chapter_read ->
         {:ok, chapter_read}
     end
@@ -83,7 +84,7 @@ defmodule Amenity.Bible do
   """
   def mark_chapter_as_read(user_id, book, chapter) do
     {:ok, chapter_read} = get_or_create_chapter_read(user_id, book, chapter)
-    
+
     chapter_read
     |> ChapterRead.mark_as_read()
     |> Repo.update()
@@ -174,7 +175,8 @@ defmodule Amenity.Bible do
   """
   def list_verse_annotations(user_id, book, chapter, verse) do
     from(a in Annotation,
-      where: a.user_id == ^user_id and a.book == ^book and a.chapter == ^chapter and a.verse == ^verse,
+      where:
+        a.user_id == ^user_id and a.book == ^book and a.chapter == ^chapter and a.verse == ^verse,
       order_by: [desc: a.inserted_at]
     )
     |> Repo.all()
