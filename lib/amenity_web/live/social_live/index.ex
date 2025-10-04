@@ -71,27 +71,26 @@ defmodule AmenityWeb.SocialLive.Index do
             <div class="flex items-center justify-between">
               <div>
                 <h1 class="text-3xl font-bold flex items-center gap-2">
-                  <.icon name="hero-chat-bubble-left-right" class="w-8 h-8" />
-                  Community Forum
+                  <.icon name="hero-chat-bubble-left-right" class="w-8 h-8" /> Community Forum
                 </h1>
                 <p class="text-sm opacity-90 mt-1">Share your thoughts and connect with others</p>
               </div>
               <div class="stats shadow bg-base-100 text-base-content">
                 <div class="stat py-2 px-4">
                   <div class="stat-title text-xs">Total Posts</div>
-                  <div class="stat-value text-2xl"><%= length(@posts) %></div>
+                  <div class="stat-value text-2xl">{length(@posts)}</div>
                 </div>
               </div>
             </div>
           </div>
-
-          <!-- Action Bar -->
+          
+    <!-- Action Bar -->
           <div class="bg-base-100 border-x border-base-300 p-3 flex items-center justify-between">
             <%= if @live_action in [:new, :edit] do %>
               <div class="breadcrumbs text-sm">
                 <ul>
                   <li><.link patch={~p"/social"}>Forum</.link></li>
-                  <li><%= if @live_action == :new, do: "New Topic", else: "Edit Post" %></li>
+                  <li>{if @live_action == :new, do: "New Topic", else: "Edit Post"}</li>
                 </ul>
               </div>
             <% else %>
@@ -101,9 +100,11 @@ defmodule AmenityWeb.SocialLive.Index do
                   <li>General Discussion</li>
                 </ul>
               </div>
-              <.link patch={~p"/social/new"} class="btn btn-sm gap-2 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all">
-                <.icon name="hero-plus" class="w-4 h-4" />
-                New Topic
+              <.link
+                patch={~p"/social/new"}
+                class="btn btn-sm gap-2 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all"
+              >
+                <.icon name="hero-plus" class="w-4 h-4" /> New Topic
               </.link>
             <% end %>
           </div>
@@ -120,16 +121,18 @@ defmodule AmenityWeb.SocialLive.Index do
               />
             </div>
           <% end %>
-
-          <!-- Posts List -->
+          
+    <!-- Posts List -->
           <%= if @posts == [] && @live_action == :index do %>
             <div class="bg-base-100 border border-base-300 rounded-b-lg p-12 text-center">
               <.icon name="hero-chat-bubble-left-right" class="w-16 h-16 mx-auto text-base-300 mb-4" />
               <h2 class="text-xl font-bold mb-2">No topics yet</h2>
               <p class="text-base-content/60 mb-4">Be the first to start a discussion!</p>
-              <.link patch={~p"/social/new"} class="btn btn-sm bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all">
-                <.icon name="hero-plus" class="w-4 h-4" />
-                Create First Topic
+              <.link
+                patch={~p"/social/new"}
+                class="btn btn-sm bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all"
+              >
+                <.icon name="hero-plus" class="w-4 h-4" /> Create First Topic
               </.link>
             </div>
           <% else %>
@@ -142,37 +145,40 @@ defmodule AmenityWeb.SocialLive.Index do
                   <div class="col-span-2 text-center">Replies</div>
                   <div class="col-span-2 text-center">Last Post</div>
                 </div>
-
-                <!-- Posts -->
+                
+    <!-- Posts -->
                 <%= for post <- @posts do %>
                   <div class="border-b border-base-300 hover:bg-base-200/50 transition-colors">
                     <div class="px-4 py-3 grid grid-cols-12 gap-4 items-center">
                       <!-- Topic Info -->
                       <div class="col-span-6">
                         <div class="flex items-start gap-3">
-                          <.icon name="hero-document-text" class="w-5 h-5 text-primary mt-1 flex-shrink-0" />
+                          <.icon
+                            name="hero-document-text"
+                            class="w-5 h-5 text-primary mt-1 flex-shrink-0"
+                          />
                           <div class="min-w-0 flex-1">
                             <.link navigate={~p"/social/#{post.id}"}>
                               <h3 class="font-semibold text-base hover:text-primary transition-colors truncate">
-                                <%= post.title %>
+                                {post.title}
                               </h3>
                             </.link>
                             <p class="text-sm text-base-content/60 line-clamp-2 mt-1">
-                              <%= post.content %>
+                              {post.content}
                             </p>
                             <%= if post.images && length(post.images) > 0 do %>
                               <div class="flex gap-1 mt-2">
                                 <span class="badge badge-sm gap-1">
                                   <.icon name="hero-photo" class="w-3 h-3" />
-                                  <%= length(post.images) %>
+                                  {length(post.images)}
                                 </span>
                               </div>
                             <% end %>
                           </div>
                         </div>
                       </div>
-
-                      <!-- Author -->
+                      
+    <!-- Author -->
                       <div class="col-span-2 text-center">
                         <div class="flex flex-col items-center gap-1">
                           <div class="avatar">
@@ -184,29 +190,29 @@ defmodule AmenityWeb.SocialLive.Index do
                               <div class="placeholder">
                                 <div class="bg-primary text-primary-content rounded-full w-8">
                                   <span class="text-xs">
-                                    <%= String.first(post.user.username) |> String.upcase() %>
+                                    {String.first(post.user.username) |> String.upcase()}
                                   </span>
                                 </div>
                               </div>
                             <% end %>
                           </div>
-                          <span class="text-sm font-medium"><%= post.user.username %></span>
+                          <span class="text-sm font-medium">{post.user.username}</span>
                         </div>
                       </div>
-
-                      <!-- Replies -->
+                      
+    <!-- Replies -->
                       <div class="col-span-2 text-center">
-                        <div class="text-lg font-bold"><%= Map.get(post, :reply_count, 0) %></div>
+                        <div class="text-lg font-bold">{Map.get(post, :reply_count, 0)}</div>
                         <div class="text-xs text-base-content/60">replies</div>
                       </div>
-
-                      <!-- Last Post -->
+                      
+    <!-- Last Post -->
                       <div class="col-span-2 text-center">
                         <div class="text-xs">
-                          <%= Calendar.strftime(post.inserted_at, "%b %d, %Y") %>
+                          {Calendar.strftime(post.inserted_at, "%b %d, %Y")}
                         </div>
                         <div class="text-xs text-base-content/60">
-                          <%= Calendar.strftime(post.inserted_at, "%I:%M %p") %>
+                          {Calendar.strftime(post.inserted_at, "%I:%M %p")}
                         </div>
                         <%= if post.edited_at do %>
                           <span class="badge badge-ghost badge-xs mt-1">edited</span>
@@ -236,18 +242,20 @@ defmodule AmenityWeb.SocialLive.Index do
                   </div>
                 <% end %>
               </div>
-
-              <!-- Forum Footer -->
+              
+    <!-- Forum Footer -->
               <div class="mt-4 bg-base-100 border border-base-300 rounded-lg p-3 flex items-center justify-between text-sm">
                 <div class="flex items-center gap-2">
                   <.icon name="hero-information-circle" class="w-4 h-4" />
                   <span class="text-base-content/60">
-                    <%= length(@posts) %> <%= if length(@posts) == 1, do: "topic", else: "topics" %>
+                    {length(@posts)} {if length(@posts) == 1, do: "topic", else: "topics"}
                   </span>
                 </div>
-                <.link patch={~p"/social/new"} class="btn btn-sm gap-2 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all">
-                  <.icon name="hero-plus" class="w-4 h-4" />
-                  New Topic
+                <.link
+                  patch={~p"/social/new"}
+                  class="btn btn-sm gap-2 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all"
+                >
+                  <.icon name="hero-plus" class="w-4 h-4" /> New Topic
                 </.link>
               </div>
             <% end %>

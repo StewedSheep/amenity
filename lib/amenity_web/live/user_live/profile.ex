@@ -30,16 +30,16 @@ defmodule AmenityWeb.UserLive.Profile do
                   <% end %>
                 </div>
               </div>
-
-              <!-- Username -->
+              
+    <!-- Username -->
               <div class="text-center">
                 <h2 class="text-3xl font-bold">{@user.username}</h2>
                 <p class="text-sm text-base-content/60">
                   Member since {Calendar.strftime(@user.inserted_at, "%B %d, %Y")}
                 </p>
               </div>
-
-              <!-- Edit Profile Picture Form -->
+              
+    <!-- Edit Profile Picture Form -->
               <div class="w-full max-w-md">
                 <.form
                   for={@profile_picture_form}
@@ -73,8 +73,8 @@ defmodule AmenityWeb.UserLive.Profile do
             </div>
           </div>
         </div>
-
-        <!-- Account Information -->
+        
+    <!-- Account Information -->
         <div class="card bg-base-200 shadow-xl">
           <div class="card-body">
             <h3 class="card-title">Account Information</h3>

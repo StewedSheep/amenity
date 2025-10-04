@@ -62,26 +62,25 @@ defmodule AmenityWeb.SocialLive.Show do
             <div class="flex items-center justify-between">
               <div>
                 <h1 class="text-3xl font-bold flex items-center gap-2">
-                  <.icon name="hero-chat-bubble-left-right" class="w-8 h-8" />
-                  Community Forum
+                  <.icon name="hero-chat-bubble-left-right" class="w-8 h-8" /> Community Forum
                 </h1>
                 <p class="text-sm opacity-90 mt-1">Share your thoughts and connect with others</p>
               </div>
             </div>
           </div>
-
-          <!-- Breadcrumbs -->
+          
+    <!-- Breadcrumbs -->
           <div class="bg-base-100 border-x border-base-300 p-3">
             <div class="breadcrumbs text-sm">
               <ul>
                 <li><.link navigate={~p"/social"}>Forum</.link></li>
                 <li>General Discussion</li>
-                <li class="font-semibold"><%= @post.title %></li>
+                <li class="font-semibold">{@post.title}</li>
               </ul>
             </div>
           </div>
-
-          <!-- Original Post -->
+          
+    <!-- Original Post -->
           <div class="bg-base-100 border-x border-b border-base-300">
             <div class="grid grid-cols-12">
               <!-- Author Sidebar -->
@@ -95,23 +94,23 @@ defmodule AmenityWeb.SocialLive.Show do
                     <div class="placeholder">
                       <div class="bg-primary text-primary-content rounded-full w-16">
                         <span class="text-2xl">
-                          <%= String.first(@post.user.username) |> String.upcase() %>
+                          {String.first(@post.user.username) |> String.upcase()}
                         </span>
                       </div>
                     </div>
                   <% end %>
                 </div>
-                <p class="font-bold text-sm"><%= @post.user.username %></p>
+                <p class="font-bold text-sm">{@post.user.username}</p>
                 <p class="text-xs text-base-content/60 mt-1">Member</p>
               </div>
-
-              <!-- Post Content -->
+              
+    <!-- Post Content -->
               <div class="col-span-10 p-4">
                 <div class="flex justify-between items-start mb-4">
                   <div>
-                    <h2 class="text-2xl font-bold"><%= @post.title %></h2>
+                    <h2 class="text-2xl font-bold">{@post.title}</h2>
                     <p class="text-sm text-base-content/60">
-                      Posted <%= Calendar.strftime(@post.inserted_at, "%B %d, %Y at %I:%M %p") %>
+                      Posted {Calendar.strftime(@post.inserted_at, "%B %d, %Y at %I:%M %p")}
                       <%= if @post.edited_at do %>
                         <span class="badge badge-ghost badge-xs ml-2">edited</span>
                       <% end %>
@@ -120,7 +119,7 @@ defmodule AmenityWeb.SocialLive.Show do
                 </div>
 
                 <div class="prose max-w-none">
-                  <p class="whitespace-pre-wrap"><%= @post.content %></p>
+                  <p class="whitespace-pre-wrap">{@post.content}</p>
                 </div>
 
                 <%= if @post.images && length(@post.images) > 0 do %>
@@ -137,13 +136,13 @@ defmodule AmenityWeb.SocialLive.Show do
               </div>
             </div>
           </div>
-
-          <!-- Replies Header -->
+          
+    <!-- Replies Header -->
           <div class="bg-base-200 border-x border-b border-base-300 px-4 py-2 font-semibold text-sm">
-            <%= length(@post.replies) %> <%= if length(@post.replies) == 1, do: "Reply", else: "Replies" %>
+            {length(@post.replies)} {if length(@post.replies) == 1, do: "Reply", else: "Replies"}
           </div>
-
-          <!-- Replies -->
+          
+    <!-- Replies -->
           <%= for reply <- @post.replies do %>
             <div class="bg-base-100 border-x border-b border-base-300">
               <div class="grid grid-cols-12">
@@ -158,20 +157,20 @@ defmodule AmenityWeb.SocialLive.Show do
                       <div class="placeholder">
                         <div class="bg-primary text-primary-content rounded-full w-12">
                           <span class="text-lg">
-                            <%= String.first(reply.user.username) |> String.upcase() %>
+                            {String.first(reply.user.username) |> String.upcase()}
                           </span>
                         </div>
                       </div>
                     <% end %>
                   </div>
-                  <p class="font-bold text-xs"><%= reply.user.username %></p>
+                  <p class="font-bold text-xs">{reply.user.username}</p>
                 </div>
-
-                <!-- Reply Content -->
+                
+    <!-- Reply Content -->
                 <div class="col-span-10 p-4">
                   <div class="flex justify-between items-start mb-2">
                     <p class="text-xs text-base-content/60">
-                      Posted <%= Calendar.strftime(reply.inserted_at, "%B %d, %Y at %I:%M %p") %>
+                      Posted {Calendar.strftime(reply.inserted_at, "%B %d, %Y at %I:%M %p")}
                       <%= if reply.edited_at do %>
                         <span class="badge badge-ghost badge-xs ml-2">edited</span>
                       <% end %>
@@ -183,25 +182,23 @@ defmodule AmenityWeb.SocialLive.Show do
                         data-confirm="Are you sure you want to delete this reply?"
                         class="btn btn-ghost btn-xs text-error"
                       >
-                        <.icon name="hero-trash" class="w-3 h-3" />
-                        Delete
+                        <.icon name="hero-trash" class="w-3 h-3" /> Delete
                       </button>
                     <% end %>
                   </div>
 
                   <div class="prose max-w-none">
-                    <p class="whitespace-pre-wrap text-sm"><%= reply.content %></p>
+                    <p class="whitespace-pre-wrap text-sm">{reply.content}</p>
                   </div>
                 </div>
               </div>
             </div>
           <% end %>
-
-          <!-- Reply Form -->
+          
+    <!-- Reply Form -->
           <div class="bg-base-100 border-x border-b border-base-300 rounded-b-lg p-4">
             <h3 class="font-bold mb-3 flex items-center gap-2">
-              <.icon name="hero-chat-bubble-left" class="w-5 h-5" />
-              Post a Reply
+              <.icon name="hero-chat-bubble-left" class="w-5 h-5" /> Post a Reply
             </h3>
             <form phx-submit="submit_reply">
               <textarea
@@ -212,19 +209,20 @@ defmodule AmenityWeb.SocialLive.Show do
                 required
               ><%= @reply_content %></textarea>
               <div class="flex justify-end mt-3">
-                <button type="submit" class="btn btn-sm gap-2 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all">
-                  <.icon name="hero-paper-airplane" class="w-4 h-4" />
-                  Post Reply
+                <button
+                  type="submit"
+                  class="btn btn-sm gap-2 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all"
+                >
+                  <.icon name="hero-paper-airplane" class="w-4 h-4" /> Post Reply
                 </button>
               </div>
             </form>
           </div>
-
-          <!-- Back Button -->
+          
+    <!-- Back Button -->
           <div class="mt-4">
             <.link navigate={~p"/social"} class="btn btn-ghost btn-sm">
-              <.icon name="hero-arrow-left" class="w-4 h-4" />
-              Back to Forum
+              <.icon name="hero-arrow-left" class="w-4 h-4" /> Back to Forum
             </.link>
           </div>
         </div>

@@ -12,6 +12,7 @@ defmodule Amenity.Application do
       Amenity.Repo,
       {DNSCluster, query: Application.get_env(:amenity, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Amenity.PubSub},
+      AmenityWeb.Presence,
       # Start a worker by calling: Amenity.Worker.start_link(arg)
       # {Amenity.Worker, arg},
       # Start to serve requests, typically the last entry

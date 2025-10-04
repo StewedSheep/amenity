@@ -10,155 +10,157 @@ defmodule AmenityWeb.SocialLive.PostFormComponent do
       <div class="border-b border-base-300 px-4 py-3 bg-base-200">
         <h3 class="text-lg font-bold flex items-center gap-2">
           <.icon name="hero-pencil-square" class="w-5 h-5" />
-          <%= if @action == :new, do: "Post New Topic", else: "Edit Topic" %>
+          {if @action == :new, do: "Post New Topic", else: "Edit Topic"}
         </h3>
       </div>
       <div class="p-4">
+        <.form
+          for={@form}
+          id={"post-form-#{@id}"}
+          phx-target={@myself}
+          phx-change="validate"
+          phx-submit="save"
+        >
+          <div class="space-y-4">
+            <.input field={@form[:title]} type="text" label="Title" placeholder="Enter post title..." />
 
-      <.form
-        for={@form}
-        id={"post-form-#{@id}"}
-        phx-target={@myself}
-        phx-change="validate"
-        phx-submit="save"
-      >
-        <div class="space-y-4">
-          <.input field={@form[:title]} type="text" label="Title" placeholder="Enter post title..." />
+            <.input
+              field={@form[:content]}
+              type="textarea"
+              label="Content"
+              placeholder="Share your thoughts..."
+              rows="6"
+            />
 
-          <.input
-            field={@form[:content]}
-            type="textarea"
-            label="Content"
-            placeholder="Share your thoughts..."
-            rows="6"
-          />
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text font-medium">Images (optional)</span>
+              </label>
 
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text font-medium">Images (optional)</span>
-            </label>
-
-            <div class="tabs tabs-boxed mb-4">
-              <a class="tab tab-active">Upload</a>
-              <a class="tab">Link URL</a>
-            </div>
-
-            <div class="space-y-4">
-              <div
-                class="border-2 border-dashed border-base-300 rounded-lg p-8 text-center hover:border-primary transition-colors cursor-pointer bg-base-200/50"
-                phx-drop-target={@uploads.images.ref}
-              >
-                <.live_file_input upload={@uploads.images} class="hidden" />
-                <label for={@uploads.images.ref} class="cursor-pointer">
-                  <.icon name="hero-photo" class="w-16 h-16 mx-auto opacity-40 mb-3" />
-                  <p class="text-sm font-medium mb-1">
-                    Click to upload or drag and drop images
-                  </p>
-                  <p class="text-xs opacity-60">
-                    PNG, JPG, GIF up to 5MB each (max 4 images)
-                  </p>
-                </label>
+              <div class="tabs tabs-boxed mb-4">
+                <a class="tab tab-active">Upload</a>
+                <a class="tab">Link URL</a>
               </div>
 
-              <div class="divider">OR</div>
-
-              <div class="join w-full">
-                <input
-                  type="text"
-                  placeholder="Paste image URL (https://...)"
-                  class="input input-bordered join-item flex-1"
-                  value={@image_url}
-                  phx-target={@myself}
-                  name="image_url"
-                />
-                <button
-                  type="button"
-                  class="btn join-item bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all"
-                  phx-click="add-image-url"
-                  phx-target={@myself}
-                  disabled={@image_url == ""}
+              <div class="space-y-4">
+                <div
+                  class="border-2 border-dashed border-base-300 rounded-lg p-8 text-center hover:border-primary transition-colors cursor-pointer bg-base-200/50"
+                  phx-drop-target={@uploads.images.ref}
                 >
-                  <.icon name="hero-plus" class="w-5 h-5" />
-                  Add
-                </button>
-              </div>
-            </div>
+                  <.live_file_input upload={@uploads.images} class="hidden" />
+                  <label for={@uploads.images.ref} class="cursor-pointer">
+                    <.icon name="hero-photo" class="w-16 h-16 mx-auto opacity-40 mb-3" />
+                    <p class="text-sm font-medium mb-1">
+                      Click to upload or drag and drop images
+                    </p>
+                    <p class="text-xs opacity-60">
+                      PNG, JPG, GIF up to 5MB each (max 4 images)
+                    </p>
+                  </label>
+                </div>
 
-            <%= for entry <- @uploads.images.entries do %>
-              <div class="alert mt-3">
-                <div class="flex items-center gap-3 flex-1">
-                  <.live_img_preview entry={entry} class="w-16 h-16 object-cover rounded-lg" />
-                  <div class="flex-1">
-                    <p class="text-sm font-medium"><%= entry.client_name %></p>
-                    <progress class="progress progress-primary w-full" value={entry.progress} max="100"></progress>
+                <div class="divider">OR</div>
+
+                <div class="join w-full">
+                  <input
+                    type="text"
+                    placeholder="Paste image URL (https://...)"
+                    class="input input-bordered join-item flex-1"
+                    value={@image_url}
+                    phx-target={@myself}
+                    name="image_url"
+                  />
+                  <button
+                    type="button"
+                    class="btn join-item bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all"
+                    phx-click="add-image-url"
+                    phx-target={@myself}
+                    disabled={@image_url == ""}
+                  >
+                    <.icon name="hero-plus" class="w-5 h-5" /> Add
+                  </button>
+                </div>
+              </div>
+
+              <%= for entry <- @uploads.images.entries do %>
+                <div class="alert mt-3">
+                  <div class="flex items-center gap-3 flex-1">
+                    <.live_img_preview entry={entry} class="w-16 h-16 object-cover rounded-lg" />
+                    <div class="flex-1">
+                      <p class="text-sm font-medium">{entry.client_name}</p>
+                      <progress
+                        class="progress progress-primary w-full"
+                        value={entry.progress}
+                        max="100"
+                      >
+                      </progress>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    phx-click="cancel-upload"
+                    phx-value-ref={entry.ref}
+                    phx-target={@myself}
+                    class="btn btn-ghost btn-sm btn-circle"
+                  >
+                    <.icon name="hero-x-mark" class="w-5 h-5" />
+                  </button>
+                </div>
+              <% end %>
+
+              <%= for err <- upload_errors(@uploads.images) do %>
+                <div class="alert alert-error mt-2">
+                  <.icon name="hero-exclamation-circle" class="w-5 h-5" />
+                  <span>{error_to_string(err)}</span>
+                </div>
+              <% end %>
+
+              <%= if @linked_images != [] do %>
+                <div class="mt-4">
+                  <p class="text-sm font-medium mb-2">Linked Images:</p>
+                  <div class="grid grid-cols-2 gap-2">
+                    <%= for image_url <- @linked_images do %>
+                      <div class="relative group">
+                        <img
+                          src={image_url}
+                          alt="Linked image"
+                          class="w-full h-32 object-cover rounded-lg"
+                        />
+                        <button
+                          type="button"
+                          phx-click="remove-linked-image"
+                          phx-value-url={image_url}
+                          phx-target={@myself}
+                          class="btn btn-error btn-sm btn-circle absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <.icon name="hero-x-mark" class="w-4 h-4" />
+                        </button>
+                      </div>
+                    <% end %>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  phx-click="cancel-upload"
-                  phx-value-ref={entry.ref}
-                  phx-target={@myself}
-                  class="btn btn-ghost btn-sm btn-circle"
-                >
-                  <.icon name="hero-x-mark" class="w-5 h-5" />
-                </button>
-              </div>
-            <% end %>
+              <% end %>
+            </div>
 
-            <%= for err <- upload_errors(@uploads.images) do %>
-              <div class="alert alert-error mt-2">
-                <.icon name="hero-exclamation-circle" class="w-5 h-5" />
-                <span><%= error_to_string(err) %></span>
-              </div>
-            <% end %>
-
-            <%= if @linked_images != [] do %>
-              <div class="mt-4">
-                <p class="text-sm font-medium mb-2">Linked Images:</p>
-                <div class="grid grid-cols-2 gap-2">
-                  <%= for image_url <- @linked_images do %>
-                    <div class="relative group">
-                      <img
-                        src={image_url}
-                        alt="Linked image"
-                        class="w-full h-32 object-cover rounded-lg"
-                      />
-                      <button
-                        type="button"
-                        phx-click="remove-linked-image"
-                        phx-value-url={image_url}
-                        phx-target={@myself}
-                        class="btn btn-error btn-sm btn-circle absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <.icon name="hero-x-mark" class="w-4 h-4" />
-                      </button>
-                    </div>
-                  <% end %>
-                </div>
-              </div>
-            <% end %>
+            <div class="flex justify-end gap-2 pt-4 border-t border-base-300">
+              <button
+                type="button"
+                phx-click="cancel"
+                phx-target={@myself}
+                class="btn btn-ghost btn-sm"
+              >
+                <.icon name="hero-x-mark" class="w-4 h-4" /> Cancel
+              </button>
+              <button
+                type="submit"
+                class="btn btn-sm gap-2 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all"
+              >
+                <.icon name="hero-paper-airplane" class="w-4 h-4" />
+                {if @action == :new, do: "Submit Topic", else: "Update Topic"}
+              </button>
+            </div>
           </div>
-
-          <div class="flex justify-end gap-2 pt-4 border-t border-base-300">
-            <button
-              type="button"
-              phx-click="cancel"
-              phx-target={@myself}
-              class="btn btn-ghost btn-sm"
-            >
-              <.icon name="hero-x-mark" class="w-4 h-4" />
-              Cancel
-            </button>
-            <button
-              type="submit"
-              class="btn btn-sm gap-2 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all"
-            >
-              <.icon name="hero-paper-airplane" class="w-4 h-4" />
-              <%= if @action == :new, do: "Submit Topic", else: "Update Topic" %>
-            </button>
-          </div>
-        </div>
-      </.form>
+        </.form>
       </div>
     </div>
     """
@@ -211,7 +213,10 @@ defmodule AmenityWeb.SocialLive.PostFormComponent do
     else
       {:noreply,
        socket
-       |> put_flash(:error, "Please enter a valid image URL (must start with http:// or https://)")}
+       |> put_flash(
+         :error,
+         "Please enter a valid image URL (must start with http:// or https://)"
+       )}
     end
   end
 

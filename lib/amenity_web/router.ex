@@ -71,6 +71,9 @@ defmodule AmenityWeb.Router do
 
       # Study routes
       live "/study", StudyLive.Index, :index
+
+      # Trivia Battle routes
+      live "/trivia/rooms", TriviaLive.Rooms, :index
     end
 
     post "/users/update-password", UserSessionController, :update_password

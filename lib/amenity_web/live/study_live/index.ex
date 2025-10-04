@@ -73,9 +73,9 @@ defmodule AmenityWeb.StudyLive.Index do
               </div>
             </div>
 
-            <button class="btn btn-secondary w-full btn-lg rounded-full">
+            <.link navigate={~p"/trivia/rooms"} class="btn btn-secondary w-full btn-lg rounded-full">
               Start Battle
-            </button>
+            </.link>
           </div>
         </div>
         
