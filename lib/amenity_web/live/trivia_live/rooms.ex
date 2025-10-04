@@ -200,19 +200,21 @@ defmodule AmenityWeb.TriviaLive.Rooms do
             </div>
           </div>
           
-    <!-- Create Room Button -->
-          <div class="mb-8 flex justify-center">
-            <button
-              phx-click="toggle_create_form"
-              class="btn btn-primary btn-lg rounded-full px-8"
-            >
-              <%= if @show_create_form do %>
-                ✕ Cancel
-              <% else %>
-                ➕ Create New Room
-              <% end %>
-            </button>
-          </div>
+    <!-- Create Room Button (only show if rooms exist) -->
+          <%= if !Enum.empty?(@rooms) do %>
+            <div class="mb-8 flex justify-center">
+              <button
+                phx-click="toggle_create_form"
+                class="btn btn-primary btn-lg rounded-full px-8"
+              >
+                <%= if @show_create_form do %>
+                  ✕ Cancel
+                <% else %>
+                  ➕ Create New Room
+                <% end %>
+              </button>
+            </div>
+          <% end %>
           
     <!-- Create Room Form -->
           <%= if @show_create_form do %>
