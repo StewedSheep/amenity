@@ -1,8 +1,6 @@
 defmodule AmenityWeb.StudyLive.Index do
   use AmenityWeb, :live_view
 
-  alias Amenity.Study
-
   @impl true
   def mount(_params, _session, socket) do
     {:ok, socket}

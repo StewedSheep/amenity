@@ -19,6 +19,9 @@ defmodule AmenityWeb.BibleLive.Reader do
       |> assign(:show_annotation_modal, false)
       |> assign(:selected_verse, nil)
       |> assign(:is_read, false)
+      |> assign(:generating_flashcards, false)
+      |> assign(:show_action_menu, false)
+      |> assign(:mark_with_flashcards, true)
 
     if connected?(socket) do
       send(self(), :load_chapter)
@@ -99,37 +102,75 @@ defmodule AmenityWeb.BibleLive.Reader do
     {:noreply, assign(socket, :show_annotation_modal, false)}
   end
 
+  def handle_event("toggle_flashcard_mode", _params, socket) do
+    {:noreply, assign(socket, :mark_with_flashcards, !socket.assigns.mark_with_flashcards)}
+  end
+
   def handle_event("mark_as_read", _params, socket) do
     user_id = socket.assigns.current_scope.user.id
 
     case Bible.mark_chapter_as_read(user_id, socket.assigns.book, socket.assigns.chapter) do
       {:ok, _chapter_read} ->
-        # Generate flashcards synchronously for now (can make async later)
-        case Amenity.Study.generate_flashcards_from_chapter(
-               user_id,
-               socket.assigns.book,
-               socket.assigns.chapter,
-               socket.assigns.verses,
-               socket.assigns.annotations
-             ) do
-          {:ok, _flashcard_set} ->
-            {:noreply,
-             socket
-             |> assign(:is_read, true)
-             |> put_flash(:info, "✨ Chapter marked as read! Flashcards generated!")}
+        if socket.assigns.mark_with_flashcards do
+          # Generate flashcards
+          send(self(), {:generate_flashcards, user_id})
 
-          {:error, reason} ->
-            require Logger
-            Logger.error("Flashcard generation failed: #{inspect(reason)}")
-
-            {:noreply,
-             socket
-             |> assign(:is_read, true)
-             |> put_flash(:info, "✨ Chapter marked as read!")}
+          {:noreply,
+           socket
+           |> assign(:is_read, true)
+           |> assign(:generating_flashcards, true)
+           |> put_flash(:info, "✨ Chapter marked as read! Generating flashcards...")}
+        else
+          # Just mark as read
+          {:noreply,
+           socket
+           |> assign(:is_read, true)
+           |> put_flash(:info, "✨ Chapter marked as read!")}
         end
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Could not mark chapter as read")}
+    end
+  end
+
+  def handle_event("unmark_as_read", _params, socket) do
+    user_id = socket.assigns.current_scope.user.id
+
+    case Bible.unmark_chapter_as_read(user_id, socket.assigns.book, socket.assigns.chapter) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> assign(:is_read, false)
+         |> put_flash(:info, "Chapter unmarked")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Could not unmark chapter")}
+    end
+  end
+
+
+  def handle_info({:generate_flashcards, user_id}, socket) do
+    case Amenity.Study.generate_flashcards_from_chapter(
+           user_id,
+           socket.assigns.book,
+           socket.assigns.chapter,
+           socket.assigns.verses,
+           socket.assigns.annotations
+         ) do
+      {:ok, _flashcard_set} ->
+        {:noreply,
+         socket
+         |> assign(:generating_flashcards, false)
+         |> put_flash(:info, "✨ Flashcards generated successfully!")}
+
+      {:error, reason} ->
+        require Logger
+        Logger.error("Flashcard generation failed: #{inspect(reason)}")
+
+        {:noreply,
+         socket
+         |> assign(:generating_flashcards, false)
+         |> put_flash(:error, "Failed to generate flashcards")}
     end
   end
 
@@ -154,34 +195,24 @@ defmodule AmenityWeb.BibleLive.Reader do
       <div class="max-w-4xl mx-auto px-4 py-8">
         <!-- Header with whimsical styling -->
         <div class="text-center mb-8">
-          <h1 class="text-5xl font-bold mb-2 bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 bg-clip-text text-transparent animate-pulse">
+          <h1 class="text-5xl font-bold mb-2 bg-gradient-to-r from-purple-600 via-pink-600 to-yellow-600 bg-clip-text text-transparent">
             {@book} {@chapter}
           </h1>
           <p class="text-gray-600 text-lg">📖 {@translation} Translation</p>
         </div>
-        
-    <!-- Book List button -->
-        <div class="flex justify-center mb-6">
-          <.link
-            navigate={~p"/bible"}
-            class="btn btn-ghost btn-lg text-purple-600 hover:text-purple-800"
-          >
-            📚 Book List
-          </.link>
-        </div>
-        
+
     <!-- Loading state -->
         <div :if={@loading} class="text-center py-20">
           <div class="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-purple-500">
           </div>
           <p class="mt-4 text-xl text-gray-600">Loading chapter...</p>
         </div>
-        
+
     <!-- Error state -->
         <div :if={@error} class="alert alert-error shadow-lg">
           <span>❌ Error: {@error}</span>
         </div>
-        
+
     <!-- Verses -->
         <div
           :if={!@loading and !@error}
@@ -247,7 +278,7 @@ defmodule AmenityWeb.BibleLive.Reader do
           </div>
         </div>
       </div>
-      
+
     <!-- Navigation buttons - Fixed to sides -->
       <button
         :if={@chapter > 1}
@@ -263,20 +294,58 @@ defmodule AmenityWeb.BibleLive.Reader do
       >
         →
       </button>
-      
-    <!-- Mark as Read button - Fixed to bottom right -->
-      <%= if @is_read do %>
-        <div class="fixed bottom-6 right-6 z-50 btn bg-gradient-to-r from-green-400 via-blue-500 to-purple-600 text-white font-semibold px-6 py-3 rounded-full shadow-2xl cursor-default">
-          ✅ Marked Read
-        </div>
-      <% else %>
-        <button
-          phx-click="mark_as_read"
-          class="fixed bottom-6 right-6 z-50 btn bg-gray-600 hover:bg-gray-700 text-white font-semibold px-6 py-3 rounded-full shadow-2xl hover:shadow-3xl hover:scale-105 transition-all"
-        >
-          ☐ Mark as Read
-        </button>
-      <% end %>
+
+    <!-- Floating Action Buttons - Bottom Right -->
+      <div class="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4">
+        <%= if @generating_flashcards do %>
+          <div class="btn bg-blue-600 text-white font-semibold px-6 py-3 rounded-full shadow-2xl cursor-wait">
+            <span class="loading loading-spinner loading-sm"></span>
+            Generating flashcards...
+          </div>
+        <% else %>
+          <.link
+            navigate={~p"/bible"}
+            class="btn btn-lg bg-purple-500 hover:bg-purple-600 text-white rounded-2xl shadow-xl hover:shadow-2xl hover:scale-105 transition-all whitespace-nowrap px-8 py-4"
+          >
+            📚 Book List
+          </.link>
+
+          <%= if @is_read do %>
+            <button
+              phx-click="unmark_as_read"
+              class="btn btn-lg bg-gradient-to-r from-green-400 via-blue-500 to-purple-600 hover:from-gray-500 hover:via-gray-600 hover:to-gray-700 text-white font-semibold px-8 py-4 rounded-2xl shadow-xl hover:shadow-2xl hover:scale-105 transition-all whitespace-nowrap"
+            >
+              ✅ Unmark as Read
+            </button>
+          <% else %>
+            <!-- Mark as Read with Toggle -->
+            <div class="bg-white rounded-2xl shadow-xl p-4 border-2 border-green-400">
+              <!-- Toggle Switch -->
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-sm font-semibold text-gray-700">Include Flashcards:</span>
+                <button
+                  phx-click="toggle_flashcard_mode"
+                  class={"relative inline-flex h-8 w-14 items-center rounded-full transition-colors #{if @mark_with_flashcards, do: "bg-blue-500", else: "bg-gray-300"}"}
+                >
+                  <span class={"inline-block h-6 w-6 transform rounded-full bg-white transition-transform #{if @mark_with_flashcards, do: "translate-x-7", else: "translate-x-1"}"}></span>
+                </button>
+              </div>
+
+              <!-- Main Action Button -->
+              <button
+                phx-click="mark_as_read"
+                class={"btn btn-lg w-full rounded-xl shadow-lg hover:shadow-2xl hover:scale-105 transition-all text-white font-semibold #{if @mark_with_flashcards, do: "bg-blue-500 hover:bg-blue-600", else: "bg-green-500 hover:bg-green-600"}"}
+              >
+                <%= if @mark_with_flashcards do %>
+                  🎴 Mark as Read + Flashcards
+                <% else %>
+                  ✓ Mark as Read Only
+                <% end %>
+              </button>
+            </div>
+          <% end %>
+        <% end %>
+      </div>
     </div>
     """
   end

@@ -67,7 +67,7 @@ defmodule AmenityWeb.UserLive.Registration do
   @impl true
   def handle_event("save", %{"user" => user_params}, socket) do
     case Accounts.register_user(user_params) do
-      {:ok, user} ->
+      {:ok, _user} ->
         {:noreply,
          socket
          |> put_flash(:info, "Account created successfully! You can now log in.")

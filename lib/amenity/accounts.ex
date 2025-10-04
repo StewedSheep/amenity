@@ -293,7 +293,7 @@ defmodule Amenity.Accounts do
     {encoded_token, user_token} = UserToken.build_email_token(user, "change:#{current_email}")
 
     Repo.insert!(user_token)
-    UserNotifier.deliver_update_email_instructions(user, update_email_url_fun.(encoded_token))
+    Amenity.Accounts.UserNotifier.deliver_update_email_instructions(user, update_email_url_fun.(encoded_token))
   end
 
   @doc """
@@ -303,7 +303,7 @@ defmodule Amenity.Accounts do
       when is_function(magic_link_url_fun, 1) do
     {encoded_token, user_token} = UserToken.build_email_token(user, "login")
     Repo.insert!(user_token)
-    UserNotifier.deliver_login_instructions(user, magic_link_url_fun.(encoded_token))
+    Amenity.Accounts.UserNotifier.deliver_login_instructions(user, magic_link_url_fun.(encoded_token))
   end
 
   @doc """

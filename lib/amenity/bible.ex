@@ -33,7 +33,7 @@ defmodule Amenity.Bible do
   Fetches the list of available books from the API.
   Only returns the Books of Moses (Torah/Pentateuch).
   """
-  def fetch_books(translation \\ "KJV") do
+  def fetch_books(_translation \\ "KJV") do
     # Return only the Books of Moses
     {:ok, get_default_books()}
   end
@@ -91,9 +91,21 @@ defmodule Amenity.Bible do
   end
 
   @doc """
+  Unmarks a chapter as read by deleting the chapter read record.
+  """
+  def unmark_chapter_as_read(user_id, book, chapter) do
+    from(c in ChapterRead,
+      where: c.user_id == ^user_id and c.book == ^book and c.chapter == ^chapter
+    )
+    |> Repo.delete_all()
+
+    {:ok, :deleted}
+  end
+
+  @doc """
   Gets all chapter reads for a user.
   """
-  def list_user_chapter_reads(user_id) do
+  def list_chapter_reads(user_id) do
     ChapterRead
     |> where([cr], cr.user_id == ^user_id)
     |> order_by([cr], desc: cr.updated_at)
