@@ -303,4 +303,29 @@ defmodule Amenity.Trivia do
     |> where([r], r.host_id == ^user_id)
     |> Repo.delete_all()
   end
+
+  @doc """
+  Starts a game server process for a room.
+  """
+  def start_game_server(room_id) do
+    case DynamicSupervisor.start_child(
+           Amenity.Trivia.GameSupervisor,
+           {Amenity.Trivia.GameServer, room_id}
+         ) do
+      {:ok, pid} -> {:ok, pid}
+      {:error, {:already_started, pid}} -> {:ok, pid}
+      error -> error
+    end
+  end
+
+  @doc """
+  Stops a game server process for a room.
+  """
+  def stop_game_server(room_id) do
+    try do
+      Amenity.Trivia.GameServer.stop(room_id)
+    catch
+      :exit, _ -> :ok
+    end
+  end
 end

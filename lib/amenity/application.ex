@@ -12,11 +12,17 @@ defmodule Amenity.Application do
       Amenity.Repo,
       {DNSCluster, query: Application.get_env(:amenity, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Amenity.PubSub},
-      AmenityWeb.Presence,
+      # Start the Finch HTTP client for sending emails
+      {Finch, name: Amenity.Finch},
+      # Registry for trivia game servers
+      {Registry, keys: :unique, name: Amenity.Trivia.GameRegistry},
+      # DynamicSupervisor for trivia game servers
+      {DynamicSupervisor, strategy: :one_for_one, name: Amenity.Trivia.GameSupervisor},
       # Start a worker by calling: Amenity.Worker.start_link(arg)
       # {Amenity.Worker, arg},
       # Start to serve requests, typically the last entry
-      AmenityWeb.Endpoint
+      AmenityWeb.Endpoint,
+      AmenityWeb.Presence
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

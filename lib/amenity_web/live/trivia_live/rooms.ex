@@ -23,6 +23,10 @@ defmodule AmenityWeb.TriviaLive.Rooms do
       |> assign(:current_room_id, nil)
       |> assign(:question_timer, nil)
       |> assign(:answered_users, MapSet.new())
+      |> assign(:questions, [])
+      |> assign(:current_question_index, 0)
+      |> assign(:current_question, nil)
+      |> assign(:player_scores, %{})
 
     socket =
       if connected?(socket) do
@@ -96,12 +100,16 @@ defmodule AmenityWeb.TriviaLive.Rooms do
 
     case Trivia.join_room(socket.assigns.current_scope, room_id) do
       {:ok, _participant} ->
+        # Subscribe to room-specific topic for game updates
+        Phoenix.PubSub.subscribe(Amenity.PubSub, "trivia:room:#{room_id}")
+        
         Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", :room_updated)
         rooms = Trivia.list_rooms(socket.assigns.current_scope)
 
         socket =
           socket
           |> assign(:rooms, rooms)
+          |> assign(:current_room_id, room_id)
           |> put_flash(:info, "Joined room successfully!")
 
         {:noreply, socket}
@@ -162,45 +170,90 @@ defmodule AmenityWeb.TriviaLive.Rooms do
   @impl true
   def handle_event("start_game", %{"room-id" => room_id}, socket) do
     room_id = String.to_integer(room_id)
+    room = Enum.find(socket.assigns.rooms, &(&1.id == room_id))
     
-    # Start the game
-    Trivia.start_game(socket.assigns.current_scope, room_id)
-    
-    # Broadcast game start to all players
-    Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", {:game_started, room_id})
-    
-    # Start countdown for host
-    socket =
-      socket
-      |> assign(:current_room_id, room_id)
-      |> assign(:game_state, :countdown)
-      |> assign(:countdown, 3)
-    
-    # Schedule countdown ticks that will be broadcast to all
-    schedule_countdown(room_id, 3)
-    
-    {:noreply, socket}
+    unless room do
+      {:noreply, put_flash(socket, :error, "Room not found")}
+    else
+      participant_ids = Enum.map(room.participants, & &1.user_id)
+      
+      # First, generate questions via OpenAI
+      case Amenity.Trivia.QuestionGenerator.generate_questions(
+             room.book_of_moses,
+             room.question_count,
+             room.difficulty
+           ) do
+        {:ok, questions} ->
+          # AFTER questions are ready, start the GameServer
+          case Trivia.start_game_server(room_id) do
+            {:ok, _pid} ->
+              room_data = %{
+                book_of_moses: room.book_of_moses,
+                question_count: room.question_count,
+                difficulty: room.difficulty,
+                participant_ids: participant_ids
+              }
+              
+              # Tell GameServer to start with pre-generated questions
+              case Amenity.Trivia.GameServer.start_game(room_id, room_data, questions) do
+                {:ok, _questions} ->
+                  Trivia.start_game(socket.assigns.current_scope, room_id)
+                  
+                  # Subscribe to room-specific GameServer broadcasts
+                  Phoenix.PubSub.subscribe(Amenity.PubSub, "trivia:room:#{room_id}")
+                  
+                  socket =
+                    socket
+                    |> assign(:current_room_id, room_id)
+                    |> assign(:game_state, :countdown)
+                    |> assign(:countdown, 3)
+                    |> assign(:questions, questions)
+                    |> assign(:current_question_index, 0)
+                    |> assign(:player_scores, Map.new(participant_ids, fn id -> {id, 0} end))
+                  
+                  {:noreply, socket}
+                
+                {:error, reason} ->
+                  {:noreply, put_flash(socket, :error, "Failed to start game: #{inspect(reason)}")}
+              end
+            
+            {:error, reason} ->
+              {:noreply, put_flash(socket, :error, "Failed to start game server: #{inspect(reason)}")}
+          end
+        
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Failed to generate questions: #{inspect(reason)}")}
+      end
+    end
   end
-
-  defp schedule_countdown(room_id, count) when count > 0 do
-    Process.send_after(self(), {:broadcast_countdown, room_id, count}, 1000)
-  end
-
-  defp schedule_countdown(_room_id, _count), do: :ok
 
   @impl true
-  def handle_event("answer_question", %{"room-id" => room_id, "answer" => answer}, socket) do
+  def handle_event("answer_question", %{"room-id" => room_id, "answer-index" => answer_index}, socket) do
     room_id = String.to_integer(room_id)
-    is_correct = answer == "no"
+    answer_index = String.to_integer(answer_index)
+    time_remaining = socket.assigns.question_timer || 0
     
+    # Tell GameServer about the answer (it calculates points and manages state)
+    Amenity.Trivia.GameServer.answer_question(
+      room_id,
+      socket.assigns.current_scope.user.id,
+      answer_index,
+      time_remaining
+    )
+    
+    # Update database
+    current_question = socket.assigns.current_question
+    is_correct = answer_index == current_question["correct_answer"]
     Trivia.record_answer(socket.assigns.current_scope, room_id, is_correct)
     
-    # Broadcast that someone answered
-    Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", {:player_answered, room_id, socket.assigns.current_scope.user.id})
-    
+    # Update local UI state
     socket = assign(socket, :game_state, :answered)
     
     {:noreply, socket}
+  end
+
+  defp calculate_points(time_remaining) do
+    max(10, min(100, 10 + trunc(time_remaining * 9)))
   end
 
   @impl true
@@ -251,142 +304,101 @@ defmodule AmenityWeb.TriviaLive.Rooms do
   end
 
   @impl true
-  def handle_info({:game_started, room_id}, socket) do
-    # Check if user is in this room
-    room = Enum.find(socket.assigns.rooms, &(&1.id == room_id))
-    
-    if room && Enum.any?(room.participants, &(&1.user_id == socket.assigns.current_scope.user.id)) do
-      socket =
-        socket
-        |> assign(:current_room_id, room_id)
-        |> assign(:game_state, :countdown)
-        |> assign(:countdown, 3)
-      
-      {:noreply, socket}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  @impl true
-  def handle_info({:broadcast_countdown, room_id, count}, socket) do
-    # Broadcast countdown update to all players
-    Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", {:countdown_update, room_id, count - 1})
-    
-    if count > 1 do
-      schedule_countdown(room_id, count - 1)
-    else
-      # Countdown finished, broadcast question start
-      Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", {:show_question, room_id})
-      # Auto-end game after 10 seconds
-      Process.send_after(self(), {:broadcast_end_game, room_id}, 10_000)
-    end
-    
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info({:countdown_update, room_id, new_count}, socket) do
-    if socket.assigns.current_room_id == room_id do
-      {:noreply, assign(socket, :countdown, new_count)}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  @impl true
-  def handle_info({:show_question, room_id}, socket) do
-    if socket.assigns.current_room_id == room_id do
-      socket =
-        socket
-        |> assign(:game_state, :question)
-        |> assign(:countdown, nil)
-        |> assign(:question_timer, 10)
-        |> assign(:answered_users, MapSet.new())
-      
-      # Start question timer countdown
-      Process.send_after(self(), {:question_timer_tick, room_id}, 1000)
-      
-      {:noreply, socket}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  @impl true
-  def handle_info({:question_timer_tick, room_id}, socket) do
-    if socket.assigns.current_room_id == room_id and socket.assigns.question_timer do
-      new_timer = socket.assigns.question_timer - 1
-      
-      # Broadcast timer update to all players
-      Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", {:timer_update, room_id, new_timer})
-      
-      if new_timer > 0 do
-        Process.send_after(self(), {:question_timer_tick, room_id}, 1000)
-        {:noreply, assign(socket, :question_timer, new_timer)}
+  def handle_info({:game_started, questions, countdown}, socket) do
+    # This comes from GameServer on room-specific topic
+    # Subscribe to the room-specific topic to receive game updates
+    participant_ids = Enum.map(socket.assigns.rooms, fn room ->
+      if Enum.any?(room.participants, &(&1.user_id == socket.assigns.current_scope.user.id)) do
+        room.participants |> Enum.map(& &1.user_id)
       else
-        # Time's up, end game
-        Process.send(self(), {:broadcast_end_game, room_id}, [])
-        {:noreply, assign(socket, :question_timer, 0)}
+        []
       end
-    else
-      {:noreply, socket}
-    end
+    end) |> List.flatten() |> Enum.uniq()
+    
+    player_scores = Map.new(participant_ids, fn id -> {id, 0} end)
+    
+    socket =
+      socket
+      |> assign(:game_state, :countdown)
+      |> assign(:countdown, countdown)
+      |> assign(:questions, questions)
+      |> assign(:current_question_index, 0)
+      |> assign(:player_scores, player_scores)
+    
+    {:noreply, socket}
+  end
+
+  # GameServer broadcasts - LiveView just listens and updates UI
+  
+  @impl true
+  def handle_info({:game_tick, :countdown, value}, socket) do
+    {:noreply, assign(socket, :countdown, value)}
   end
 
   @impl true
-  def handle_info({:timer_update, room_id, new_timer}, socket) do
-    if socket.assigns.current_room_id == room_id do
-      {:noreply, assign(socket, :question_timer, new_timer)}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  @impl true
-  def handle_info({:player_answered, room_id, user_id}, socket) do
-    if socket.assigns.current_room_id == room_id do
-      # Track who answered (only for host to check)
-      answered_users = MapSet.put(socket.assigns.answered_users, user_id)
-      socket = assign(socket, :answered_users, answered_users)
-      
-      # Check if everyone answered (only host checks and triggers end)
-      room = Enum.find(socket.assigns.rooms, &(&1.id == room_id))
-      
-      if room && MapSet.size(answered_users) >= length(room.participants) do
-        # Everyone answered! End game immediately
-        Process.send(self(), {:broadcast_end_game, room_id}, [])
-      end
-      
-      {:noreply, socket}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  @impl true
-  def handle_info({:broadcast_end_game, room_id}, socket) do
-    Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", {:end_game, room_id})
+  def handle_info({:game_tick, :question, timer_value, player_scores}, socket) do
+    socket =
+      socket
+      |> assign(:question_timer, timer_value)
+      |> assign(:player_scores, player_scores)
+    
     {:noreply, socket}
   end
 
   @impl true
-  def handle_info({:end_game, room_id}, socket) do
-    if socket.assigns.current_room_id == room_id do
-      Trivia.end_game(socket.assigns.current_scope, room_id)
-      winners = Trivia.get_winners(room_id)
-      
-      socket =
-        socket
-        |> assign(:game_state, :results)
-        |> assign(:winners, winners)
-      
-      Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", :room_updated)
-      
-      {:noreply, socket}
-    else
-      {:noreply, socket}
+  def handle_info({:show_question, question, index, timer_value, player_scores}, socket) do
+    socket =
+      socket
+      |> assign(:game_state, :question)
+      |> assign(:countdown, nil)
+      |> assign(:current_question, question)
+      |> assign(:current_question_index, index)
+      |> assign(:question_timer, timer_value)
+      |> assign(:player_scores, player_scores)
+      |> assign(:answered_users, MapSet.new())
+    
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:player_answered, user_id, points, player_scores}, socket) do
+    # GameServer broadcasts when someone answers
+    answered_users = MapSet.put(socket.assigns.answered_users, user_id)
+    
+    socket =
+      socket
+      |> assign(:answered_users, answered_users)
+      |> assign(:player_scores, player_scores)
+    
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:game_over, winners, player_scores}, socket) do
+    # GameServer broadcasts game over with winners and final scores
+    # Update database
+    if socket.assigns.current_room_id do
+      Trivia.end_game(socket.assigns.current_scope, socket.assigns.current_room_id)
     end
+    
+    # Get room to map user IDs to user objects
+    room = Enum.find(socket.assigns.rooms, &(&1.id == socket.assigns.current_room_id))
+    
+    # Map winners to include user objects
+    winners_with_users = Enum.map(winners, fn %{user_id: user_id, score: score} ->
+      participant = Enum.find(room.participants, &(&1.user_id == user_id))
+      %{user_id: user_id, user: participant.user, score: score}
+    end)
+    
+    socket =
+      socket
+      |> assign(:game_state, :results)
+      |> assign(:winners, winners_with_users)
+      |> assign(:player_scores, player_scores)
+    
+    Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", :room_updated)
+    
+    {:noreply, socket}
   end
 
   @impl true
@@ -405,30 +417,56 @@ defmodule AmenityWeb.TriviaLive.Rooms do
                 </div>
               
               <% @game_state == :question -> %>
-                <div class="bg-white rounded-3xl p-12 max-w-2xl">
-                  <div class="flex justify-between items-center mb-8">
-                    <h2 class="text-4xl font-bold text-gray-800">Are you gay?</h2>
-                    <div class="text-3xl font-bold text-purple-600">
+                <div class="bg-white rounded-3xl p-12 max-w-4xl">
+                  <%!-- Question Header --%>
+                  <div class="flex justify-between items-start mb-6">
+                    <div class="flex-1">
+                      <div class="text-sm text-gray-500 mb-2">
+                        Question {@current_question_index + 1} of {length(@questions)}
+                      </div>
+                      <h2 class="text-3xl font-bold text-gray-800">{@current_question["question"]}</h2>
+                    </div>
+                    <div class="text-4xl font-bold text-purple-600 ml-4">
                       ⏱️ {@question_timer}s
                     </div>
                   </div>
-                  <div class="space-y-4">
-                    <button
-                      phx-click="answer_question"
-                      phx-value-room-id={@current_room_id}
-                      phx-value-answer="yes"
-                      class="btn btn-lg btn-error w-full text-2xl rounded-full"
-                    >
-                      Yes
-                    </button>
-                    <button
-                      phx-click="answer_question"
-                      phx-value-room-id={@current_room_id}
-                      phx-value-answer="no"
-                      class="btn btn-lg btn-success w-full text-2xl rounded-full"
-                    >
-                      No
-                    </button>
+                  
+                  <%!-- Score Display --%>
+                  <div class="mb-6 p-4 bg-purple-50 rounded-xl">
+                    <div class="text-sm font-semibold text-purple-800 mb-2">Current Scores:</div>
+                    <div class="flex flex-wrap gap-3">
+                      <%= for {user_id, score} <- Enum.sort_by(@player_scores, fn {_, s} -> -s end) do %>
+                        <% room = Enum.find(@rooms, &(&1.id == @current_room_id)) %>
+                        <% participant = Enum.find(room.participants, &(&1.user_id == user_id)) %>
+                        <div class={[
+                          "badge badge-lg gap-2",
+                          user_id == @current_scope.user.id && "badge-primary"
+                        ]}>
+                          <span>{participant.user.username}</span>
+                          <span class="font-bold">{score} pts</span>
+                        </div>
+                      <% end %>
+                    </div>
+                  </div>
+                  
+                  <%!-- Answer Options --%>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <%= for {option, index} <- Enum.with_index(@current_question["options"]) do %>
+                      <button
+                        phx-click="answer_question"
+                        phx-value-room-id={@current_room_id}
+                        phx-value-answer-index={index}
+                        class="btn btn-lg btn-outline w-full text-left justify-start h-auto py-4 px-6 rounded-2xl hover:scale-105 transition-transform"
+                      >
+                        <span class="font-bold mr-3">{String.at("ABCD", index)}.</span>
+                        <span class="text-lg">{option}</span>
+                      </button>
+                    <% end %>
+                  </div>
+                  
+                  <%!-- Points Info --%>
+                  <div class="mt-6 text-center text-sm text-gray-500">
+                    💡 Answer quickly! Points: {calculate_points(@question_timer)} (max 100, min 10)
                   </div>
                 </div>
               
@@ -449,9 +487,11 @@ defmodule AmenityWeb.TriviaLive.Rooms do
                     <h2 class="text-5xl font-bold mb-8 text-gray-800">🎉 Game Over! 🎉</h2>
                     <%= if length(@winners) == 1 do %>
                       <p class="text-4xl font-bold text-purple-600 mb-4">You Won! 🏆</p>
-                      <p class="text-2xl text-gray-600">Congratulations, champion!</p>
+                      <p class="text-2xl text-gray-600 mb-4">Final Score: {hd(@winners).score} points</p>
+                      <p class="text-xl text-gray-500">Congratulations, champion!</p>
                     <% else %>
                       <p class="text-3xl mb-4">It's a tie!</p>
+                      <p class="text-2xl text-gray-600 mb-4">Final Score: {hd(@winners).score} points</p>
                       <div class="space-y-2">
                         <%= for winner <- @winners do %>
                           <p class="text-2xl font-bold text-purple-600">{winner.user.username}</p>
@@ -461,22 +501,48 @@ defmodule AmenityWeb.TriviaLive.Rooms do
                   <% else %>
                     <h2 class="text-5xl font-bold mb-8 text-red-600">💀 You Lost 💀</h2>
                     <p class="text-3xl font-bold text-gray-800 mb-4">You are bad and you lost.</p>
-                    <p class="text-xl text-gray-600 mb-6">Maybe try being better next time? 🤷</p>
+                    <p class="text-xl text-gray-600 mb-2">Your score: {Map.get(@player_scores, @current_scope.user.id, 0)} points</p>
+                    <p class="text-lg text-gray-500 mb-6">Maybe try being better next time? 🤷</p>
                     
                     <div class="border-t-2 border-gray-200 pt-6 mt-6">
                       <%= if length(@winners) == 1 do %>
                         <p class="text-2xl mb-2 text-gray-600">Winner:</p>
                         <p class="text-3xl font-bold text-purple-600">{hd(@winners).user.username}</p>
+                        <p class="text-xl text-gray-500">{hd(@winners).score} points</p>
                       <% else %>
                         <p class="text-2xl mb-2 text-gray-600">Winners:</p>
                         <div class="space-y-2">
                           <%= for winner <- @winners do %>
-                            <p class="text-2xl font-bold text-purple-600">{winner.user.username}</p>
+                            <div>
+                              <p class="text-2xl font-bold text-purple-600">{winner.user.username}</p>
+                              <p class="text-lg text-gray-500">{winner.score} points</p>
+                            </div>
                           <% end %>
                         </div>
                       <% end %>
                     </div>
                   <% end %>
+                  
+                  <%!-- Final Leaderboard --%>
+                  <div class="border-t-2 border-gray-200 pt-6 mt-6">
+                    <p class="text-xl font-bold text-gray-700 mb-4">Final Leaderboard:</p>
+                    <div class="space-y-2">
+                      <%= for {{user_id, score}, rank} <- Enum.sort_by(@player_scores, fn {_, s} -> -s end) |> Enum.with_index(1) do %>
+                        <% room = Enum.find(@rooms, &(&1.id == @current_room_id)) %>
+                        <% participant = Enum.find(room.participants, &(&1.user_id == user_id)) %>
+                        <div class={[
+                          "flex justify-between items-center p-3 rounded-lg",
+                          user_id == @current_scope.user.id && "bg-purple-100"
+                        ]}>
+                          <div class="flex items-center gap-3">
+                            <span class="text-2xl font-bold text-gray-400">#{rank}</span>
+                            <span class="font-semibold">{participant.user.username}</span>
+                          </div>
+                          <span class="font-bold text-purple-600">{score} pts</span>
+                        </div>
+                      <% end %>
+                    </div>
+                  </div>
                   
                   <button
                     phx-click="close_game"
@@ -574,6 +640,27 @@ defmodule AmenityWeb.TriviaLive.Rooms do
                     label="Max Players"
                     min="2"
                     max="50"
+                  />
+
+                  <.input
+                    field={@form[:book_of_moses]}
+                    type="select"
+                    label="Book of Moses"
+                    options={[
+                      {"Genesis", "Genesis"},
+                      {"Exodus", "Exodus"},
+                      {"Leviticus", "Leviticus"},
+                      {"Numbers", "Numbers"},
+                      {"Deuteronomy", "Deuteronomy"}
+                    ]}
+                  />
+
+                  <.input
+                    field={@form[:question_count]}
+                    type="number"
+                    label="Number of Questions"
+                    min="1"
+                    max="10"
                   />
 
                   <div class="flex gap-4">
