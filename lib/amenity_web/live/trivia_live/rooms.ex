@@ -286,7 +286,7 @@ defmodule AmenityWeb.TriviaLive.Rooms do
                   ]}>
                     <%= if room.status == "waiting" do %>
                       <span class="inline-flex items-center gap-1">
-                        <span class="animate-bounce">⏳</span>
+                        <span class="animate-spin" style="animation-duration: 2s;">⏳</span>
                         <span>WAITING</span>
                       </span>
                     <% else %>
