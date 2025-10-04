@@ -1,6 +1,8 @@
 defmodule AmenityWeb.StudyLive.Index do
   use AmenityWeb, :live_view
 
+  alias Amenity.Study
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok, socket}
@@ -20,14 +22,17 @@ defmodule AmenityWeb.StudyLive.Index do
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
           <!-- Flashcards Card -->
-          <div class="bg-white rounded-3xl p-8 shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 border-t-4 border-blue-400">
+          <.link
+            navigate={~p"/study/flashcards"}
+            class="bg-white rounded-3xl p-8 shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 border-t-4 border-blue-400"
+          >
             <div class="text-center mb-6">
               <div class="text-6xl mb-4">🎴</div>
               <h2 class="text-3xl font-bold text-gray-800 mb-2">Flashcards</h2>
               <p class="text-gray-600">Study Bible verses and concepts with interactive flashcards</p>
             </div>
             
-            <div class="space-y-3 mb-6">
+            <div class="space-y-3">
               <div class="flex items-center gap-2 text-gray-700">
                 <span class="text-green-500">✓</span>
                 <span>Create custom card decks</span>
@@ -42,10 +47,10 @@ defmodule AmenityWeb.StudyLive.Index do
               </div>
             </div>
 
-            <button class="btn btn-primary w-full btn-lg rounded-full">
-              Start Studying
-            </button>
-          </div>
+            <div class="mt-6 text-center">
+              <span class="text-blue-600 font-semibold text-lg">View Flashcards →</span>
+            </div>
+          </.link>
 
           <!-- Trivia Battle Card -->
           <div class="bg-white rounded-3xl p-8 shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 border-t-4 border-purple-400">
@@ -79,7 +84,7 @@ defmodule AmenityWeb.StudyLive.Index do
         <!-- Coming Soon Banner -->
         <div class="text-center mt-12">
           <div class="inline-block bg-yellow-100 border-2 border-yellow-400 rounded-full px-6 py-3">
-            <p class="text-yellow-800 font-semibold">🚧 Coming Soon - Features in development</p>
+            <p class="text-yellow-800 font-semibold">🚧 Trivia Battle - Coming Soon</p>
           </div>
         </div>
       </div>

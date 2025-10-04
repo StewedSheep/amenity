@@ -52,21 +52,21 @@ defmodule AmenityWeb.Router do
 
     live_session :require_authenticated_user,
       on_mount: [{AmenityWeb.UserAuth, :require_authenticated}] do
-      live "/users/settings", UserLive.Settings, :edit
-      live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
-      
       # Bible reader routes
       live "/bible", BibleLive.Index, :index
       live "/bible/:book/:chapter", BibleLive.Reader, :show
-      
+
       # Friends routes
       live "/friends", FriendsLive.Index, :index
-      
+
       # Social routes
       live "/social", SocialLive.Index, :index
-      
+
       # Study routes
       live "/study", StudyLive.Index, :index
+      live "/study/flashcards", StudyLive.Flashcards, :index
+      live "/study/flashcards/:id", StudyLive.FlashcardSet, :show
+      live "/study/flashcards/:id/study", StudyLive.Study, :study
     end
 
     post "/users/update-password", UserSessionController, :update_password
