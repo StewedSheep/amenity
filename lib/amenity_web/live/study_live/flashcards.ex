@@ -23,6 +23,11 @@ defmodule AmenityWeb.StudyLive.Flashcards do
     {:noreply, assign(socket, :show_create_modal, false)}
   end
 
+  def handle_event("modal_content_click", _params, socket) do
+    # Do nothing - prevents click from bubbling to background
+    {:noreply, socket}
+  end
+
   def handle_event("create_set", %{"name" => name, "description" => description}, socket) do
     user_id = socket.assigns.current_scope.user.id
 
@@ -130,9 +135,9 @@ defmodule AmenityWeb.StudyLive.Flashcards do
       <!-- Create Set Modal -->
       <%= if @show_create_modal do %>
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" phx-click="hide_create_modal">
-          <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl" phx-click={JS.stop_propagation()}>
+          <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl" phx-click="modal_content_click">
             <h2 class="text-2xl font-bold text-gray-800 mb-6">Create Flashcard Set</h2>
-            
+
             <form phx-submit="create_set" class="space-y-4">
               <div>
                 <label class="block text-sm font-semibold text-gray-700 mb-2">Set Name</label>

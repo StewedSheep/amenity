@@ -174,6 +174,174 @@ defmodule Amenity.Study do
   end
 
   @doc """
+  Generates flashcards from a Bible chapter using OpenAI.
+  """
+  def generate_flashcards_from_chapter(user_id, book, chapter, verses, annotations \\ []) do
+    # Create the flashcard set
+    set_name = "#{book} #{chapter}"
+    set_description = "Auto-generated flashcards for #{book} chapter #{chapter}"
+
+    case create_flashcard_set(%{
+           user_id: user_id,
+           name: set_name,
+           description: set_description
+         }) do
+      {:ok, flashcard_set} ->
+        case call_openai_for_flashcards(book, chapter, verses, annotations) do
+          {:ok, cards} ->
+            # Create flashcards
+            results =
+              cards
+              |> Enum.with_index()
+              |> Enum.map(fn {{front, back}, index} ->
+                create_flashcard(%{
+                  flashcard_set_id: flashcard_set.id,
+                  front: front,
+                  back: back,
+                  position: index
+                })
+              end)
+
+            # Log any errors
+            Enum.each(results, fn
+              {:error, changeset} ->
+                require Logger
+                Logger.error("Failed to create flashcard: #{inspect(changeset.errors)}")
+
+              _ ->
+                :ok
+            end)
+
+            {:ok, flashcard_set}
+
+          {:error, reason} ->
+            require Logger
+            Logger.error("Failed to generate flashcards: #{inspect(reason)}")
+            {:error, reason}
+        end
+
+      {:error, changeset} ->
+        require Logger
+        Logger.error("Failed to create flashcard set: #{inspect(changeset.errors)}")
+        {:error, changeset}
+    end
+  end
+
+  defp call_openai_for_flashcards(book, chapter, verses, annotations) do
+    api_key = System.get_env("OPENAI_API_KEY")
+    
+    require Logger
+    Logger.info("API Key present: #{!is_nil(api_key)}, Length: #{if api_key, do: String.length(api_key), else: 0}")
+
+    if !api_key do
+      {:error, "OPENAI_API_KEY not set"}
+    else
+      # Combine verses into text
+      chapter_text =
+        verses
+        |> Enum.map(fn verse -> "#{verse.verse}. #{verse.text}" end)
+        |> Enum.join("\n")
+
+      # Add annotations/notes
+      notes_text =
+        if annotations != [] do
+          notes =
+            annotations
+            |> Enum.map(fn annotation ->
+              "Verse #{annotation.verse} - Note: #{annotation.note || "Highlighted: #{annotation.content}"}"
+            end)
+            |> Enum.join("\n")
+
+          "\n\nUSER'S PERSONAL NOTES (IMPORTANT - Create questions about these):\n#{notes}"
+        else
+          ""
+        end
+
+      num_questions = max(5, div(length(verses), 2) + length(annotations))
+      
+      prompt = """
+      Create #{num_questions} flashcards for studying #{book} chapter #{chapter} from the Bible.
+      
+      REQUIREMENTS:
+      - Questions must be SPECIFIC and have only ONE correct answer
+      - Include verse references in questions (e.g., "In #{book} #{chapter}:1, what...")
+      - Avoid vague questions like "What happened?" or "Who was there?"
+      - Use concrete facts: names, numbers, specific actions, direct quotes
+      - Answers should be brief (1-3 sentences maximum)
+      
+      GOOD examples:
+      - "In Genesis 1:3, what did God say?" → "Let there be light"
+      - "How many days did God take to create the world in Genesis 1?" → "Six days, and He rested on the seventh"
+      
+      BAD examples (too vague):
+      - "What did God do?" → Too broad, many possible answers
+      - "What happened in this chapter?" → Not specific enough
+      
+      Chapter text:
+      #{chapter_text}#{notes_text}
+      
+      IMPORTANT: If there are personal notes above, you MUST create at least one question for EACH note.
+      These notes represent what the user found important or confusing, so they need flashcards about them.
+      
+      Return ONLY a JSON array of objects with "front" and "back" keys.
+      Example: [{"front": "In #{book} #{chapter}:1, what did God create?", "back": "The heavens and the earth"}]
+      """
+
+      body = %{
+        model: "gpt-4o-mini",
+        messages: [
+          %{role: "system", content: "You are a Bible study assistant that creates effective flashcards."},
+          %{role: "user", content: prompt}
+        ],
+        temperature: 0.7
+      }
+
+      case Req.post("https://api.openai.com/v1/chat/completions",
+             json: body,
+             headers: [{"Authorization", "Bearer #{api_key}"}]
+           ) do
+        {:ok, %{status: 200, body: response}} ->
+          content = get_in(response, ["choices", Access.at(0), "message", "content"])
+          require Logger
+          Logger.info("OpenAI response: #{inspect(content)}")
+          parse_flashcards_json(content)
+
+        {:ok, %{status: status, body: body}} ->
+          require Logger
+          Logger.error("OpenAI API returned status #{status}: #{inspect(body)}")
+          {:error, "OpenAI API returned status #{status}"}
+
+        {:error, reason} ->
+          require Logger
+          Logger.error("OpenAI API request failed: #{inspect(reason)}")
+          {:error, reason}
+      end
+    end
+  end
+
+  defp parse_flashcards_json(content) do
+    # Remove markdown code blocks if present
+    cleaned =
+      content
+      |> String.replace(~r/```json\n?/, "")
+      |> String.replace(~r/```\n?/, "")
+      |> String.trim()
+
+    case Jason.decode(cleaned) do
+      {:ok, cards} when is_list(cards) ->
+        parsed_cards =
+          Enum.map(cards, fn card ->
+            {Map.get(card, "front"), Map.get(card, "back")}
+          end)
+
+        {:ok, parsed_cards}
+
+      _ ->
+        {:error, "Failed to parse flashcards JSON"}
+    end
+  end
+
+  @doc """
   Gets review statistics for a flashcard set.
   """
   def get_set_stats(user_id, flashcard_set_id) do

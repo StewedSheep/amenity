@@ -104,10 +104,29 @@ defmodule AmenityWeb.BibleLive.Reader do
 
     case Bible.mark_chapter_as_read(user_id, socket.assigns.book, socket.assigns.chapter) do
       {:ok, _chapter_read} ->
-        {:noreply,
-         socket
-         |> assign(:is_read, true)
-         |> put_flash(:info, "✨ Chapter marked as read!")}
+        # Generate flashcards synchronously for now (can make async later)
+        case Amenity.Study.generate_flashcards_from_chapter(
+               user_id,
+               socket.assigns.book,
+               socket.assigns.chapter,
+               socket.assigns.verses,
+               socket.assigns.annotations
+             ) do
+          {:ok, _flashcard_set} ->
+            {:noreply,
+             socket
+             |> assign(:is_read, true)
+             |> put_flash(:info, "✨ Chapter marked as read! Flashcards generated!")}
+
+          {:error, reason} ->
+            require Logger
+            Logger.error("Flashcard generation failed: #{inspect(reason)}")
+
+            {:noreply,
+             socket
+             |> assign(:is_read, true)
+             |> put_flash(:info, "✨ Chapter marked as read!")}
+        end
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Could not mark chapter as read")}
