@@ -212,7 +212,7 @@ defmodule AmenityWeb.SocialLive.Show do
                 required
               ><%= @reply_content %></textarea>
               <div class="flex justify-end mt-3">
-                <button type="submit" class="btn btn-primary btn-sm gap-2">
+                <button type="submit" class="btn btn-sm gap-2 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all">
                   <.icon name="hero-paper-airplane" class="w-4 h-4" />
                   Post Reply
                 </button>
