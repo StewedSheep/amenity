@@ -358,8 +358,9 @@ defmodule AmenityWeb.TriviaLive.Rooms do
 
                     <%!-- Ready/Play Buttons --%>
                     <%= if room.status == "waiting" do %>
-                      <%= if room.host_id == @current_scope.user.id and all_ready do %>
-                        <%!-- Host sees PLAY button when all ready --%>
+                      <% has_min_players = length(room.participants) >= 2 %>
+                      <%= if room.host_id == @current_scope.user.id and all_ready and has_min_players do %>
+                        <%!-- Host sees PLAY button when all ready and min 2 players --%>
                         <button
                           phx-click="start_game"
                           phx-value-room-id={room.id}
@@ -384,6 +385,13 @@ defmodule AmenityWeb.TriviaLive.Rooms do
                             ⏱️ READY UP
                           <% end %>
                         </button>
+                        
+                        <%!-- Show waiting message if host and all ready but not enough players --%>
+                        <%= if room.host_id == @current_scope.user.id and all_ready and !has_min_players do %>
+                          <div class="text-center text-sm text-warning mt-1">
+                            ⚠️ Need at least 2 players to start
+                          </div>
+                        <% end %>
                       <% end %>
                     <% end %>
 
