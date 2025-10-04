@@ -16,7 +16,12 @@ defmodule AmenityWeb.UserLive.Settings do
         </.header>
       </div>
 
-      <.form for={@username_form} id="username_form" phx-submit="update_username" phx-change="validate_username">
+      <.form
+        for={@username_form}
+        id="username_form"
+        phx-submit="update_username"
+        phx-change="validate_username"
+      >
         <.input
           field={@username_form[:username]}
           type="text"
@@ -105,6 +110,7 @@ defmodule AmenityWeb.UserLive.Settings do
         case Amenity.Repo.update(changeset) do
           {:ok, _updated_user} ->
             {:noreply, socket |> put_flash(:info, "Username changed successfully!")}
+
           {:error, changeset} ->
             {:noreply, assign(socket, :username_form, to_form(changeset, action: :insert))}
         end

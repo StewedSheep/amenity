@@ -54,17 +54,18 @@ defmodule AmenityWeb.Router do
       on_mount: [{AmenityWeb.UserAuth, :require_authenticated}] do
       live "/users/settings", UserLive.Settings, :edit
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
-      
+      live "/users/profile", UserLive.Profile, :show
+
       # Bible reader routes
       live "/bible", BibleLive.Index, :index
       live "/bible/:book/:chapter", BibleLive.Reader, :show
-      
+
       # Friends routes
       live "/friends", FriendsLive.Index, :index
-      
+
       # Social routes
       live "/social", SocialLive.Index, :index
-      
+
       # Study routes
       live "/study", StudyLive.Index, :index
     end

@@ -6,8 +6,9 @@ defmodule AmenityWeb.BibleLive.AnnotationComponent do
   @impl true
   def update(assigns, socket) do
     # Load all annotations for this verse
-    annotations = Bible.list_verse_annotations(assigns.user_id, assigns.book, assigns.chapter, assigns.verse)
-    
+    annotations =
+      Bible.list_verse_annotations(assigns.user_id, assigns.book, assigns.chapter, assigns.verse)
+
     {:ok,
      socket
      |> assign(assigns)
@@ -25,7 +26,7 @@ defmodule AmenityWeb.BibleLive.AnnotationComponent do
 
   @impl true
   def handle_event("show_form", _params, socket) do
-    {:noreply, 
+    {:noreply,
      socket
      |> assign(:show_form, true)
      |> assign(:editing_annotation, nil)
@@ -34,7 +35,7 @@ defmodule AmenityWeb.BibleLive.AnnotationComponent do
 
   def handle_event("edit_annotation", %{"id" => id}, socket) do
     annotation = Enum.find(socket.assigns.annotations, fn a -> a.id == String.to_integer(id) end)
-    
+
     {:noreply,
      socket
      |> assign(:show_form, true)
@@ -56,18 +57,19 @@ defmodule AmenityWeb.BibleLive.AnnotationComponent do
 
   def handle_event("delete", %{"id" => id}, socket) do
     annotation = Enum.find(socket.assigns.annotations, fn a -> a.id == String.to_integer(id) end)
-    
+
     case Bible.delete_annotation(annotation) do
       {:ok, _} ->
-        annotations = Bible.list_verse_annotations(
-          socket.assigns.user_id,
-          socket.assigns.book,
-          socket.assigns.chapter,
-          socket.assigns.verse
-        )
-        
+        annotations =
+          Bible.list_verse_annotations(
+            socket.assigns.user_id,
+            socket.assigns.book,
+            socket.assigns.chapter,
+            socket.assigns.verse
+          )
+
         notify_parent({:annotation_deleted, annotation})
-        
+
         {:noreply, assign(socket, :annotations, annotations)}
 
       {:error, _changeset} ->
@@ -85,35 +87,36 @@ defmodule AmenityWeb.BibleLive.AnnotationComponent do
 
     # Validate content
     content = Map.get(params, "content", "") |> String.trim()
-    
+
     changeset = Bible.change_annotation(%Bible.Annotation{}, params)
-    
-    changeset = 
+
+    changeset =
       cond do
         String.length(content) < 3 ->
           Ecto.Changeset.add_error(changeset, :content, "must be at least 3 characters")
-        
+
         has_overlap?(socket.assigns.annotations, content) ->
           Ecto.Changeset.add_error(changeset, :content, "this text is already annotated")
-        
+
         true ->
           changeset
       end
-    
+
     if changeset.errors != [] do
       {:noreply, assign(socket, :form, to_form(Map.put(changeset, :action, :validate)))}
     else
       case Bible.create_annotation(params) do
         {:ok, annotation} ->
-          annotations = Bible.list_verse_annotations(
-            socket.assigns.user_id,
-            socket.assigns.book,
-            socket.assigns.chapter,
-            socket.assigns.verse
-          )
-          
+          annotations =
+            Bible.list_verse_annotations(
+              socket.assigns.user_id,
+              socket.assigns.book,
+              socket.assigns.chapter,
+              socket.assigns.verse
+            )
+
           notify_parent({:annotation_saved, annotation})
-          
+
           {:noreply,
            socket
            |> assign(:annotations, annotations)
@@ -127,27 +130,28 @@ defmodule AmenityWeb.BibleLive.AnnotationComponent do
 
   defp has_overlap?(annotations, new_content) do
     new_lower = String.downcase(new_content)
-    
+
     Enum.any?(annotations, fn annotation ->
       existing_lower = String.downcase(annotation.content)
       # Check if the new content overlaps with existing annotation content
       String.contains?(existing_lower, new_lower) ||
-      String.contains?(new_lower, existing_lower)
+        String.contains?(new_lower, existing_lower)
     end)
   end
 
   defp save_annotation(socket, :edit, annotation_params) do
     case Bible.update_annotation(socket.assigns.editing_annotation, annotation_params) do
       {:ok, annotation} ->
-        annotations = Bible.list_verse_annotations(
-          socket.assigns.user_id,
-          socket.assigns.book,
-          socket.assigns.chapter,
-          socket.assigns.verse
-        )
-        
+        annotations =
+          Bible.list_verse_annotations(
+            socket.assigns.user_id,
+            socket.assigns.book,
+            socket.assigns.chapter,
+            socket.assigns.verse
+          )
+
         notify_parent({:annotation_saved, annotation})
-        
+
         {:noreply,
          socket
          |> assign(:annotations, annotations)
@@ -182,10 +186,13 @@ defmodule AmenityWeb.BibleLive.AnnotationComponent do
           <%= if @annotations == [] do %>
             <p class="text-gray-500 text-center py-4">No annotations yet</p>
           <% else %>
-            <div :for={annotation <- @annotations} class={[
-              "p-4 rounded-lg border-l-4",
-              annotation_border_class(annotation.color)
-            ]}>
+            <div
+              :for={annotation <- @annotations}
+              class={[
+                "p-4 rounded-lg border-l-4",
+                annotation_border_class(annotation.color)
+              ]}
+            >
               <div class="flex justify-between items-start mb-2">
                 <span class={[
                   "text-xs font-semibold px-2 py-1 rounded",
@@ -220,8 +227,8 @@ defmodule AmenityWeb.BibleLive.AnnotationComponent do
             </div>
           <% end %>
         </div>
-
-        <!-- Add New Button -->
+        
+    <!-- Add New Button -->
         <button
           phx-click="show_form"
           phx-target={@myself}
@@ -230,80 +237,83 @@ defmodule AmenityWeb.BibleLive.AnnotationComponent do
           ➕ Add New Annotation
         </button>
       <% else %>
-
-      <.form for={@form} phx-target={@myself} phx-submit="save" class="space-y-4">
-        <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-2">
-            Highlight Text
-          </label>
-          <textarea
-            name="annotation[content]"
-            rows="3"
-            class="textarea textarea-bordered w-full"
-            placeholder="Enter the verse text you want to highlight..."
-            required
-          >{@form[:content].value}</textarea>
-          <%= if @form[:content].errors != [] do %>
-            <p class="text-xs text-red-600 mt-1">
-              <%= elem(hd(@form[:content].errors), 0) %>
-            </p>
-          <% else %>
-            <p class="text-xs text-gray-500 mt-1">The text from the verse you're annotating (min 3 characters)</p>
-          <% end %>
-        </div>
-
-        <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-2">
-            Personal Notes (Optional)
-          </label>
-          <textarea
-            name="annotation[note]"
-            rows="5"
-            class="textarea textarea-bordered w-full"
-            placeholder="Add your personal notes, reflections, or insights..."
-          >{@form[:note].value}</textarea>
-          <p class="text-xs text-gray-500 mt-1">Your private thoughts and reflections</p>
-        </div>
-
-        <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-2">
-            Highlight Color
-          </label>
-          <div class="flex gap-3">
-            <label
-              :for={color <- ["yellow", "blue", "green", "pink", "purple"]}
-              class="cursor-pointer"
-            >
-              <input
-                type="radio"
-                name="annotation[color]"
-                value={color}
-                checked={@form[:color].value == color || (is_nil(@form[:color].value) && color == "yellow")}
-                class="hidden peer"
-              />
-              <div class={[
-                "w-10 h-10 rounded-full border-4 transition-all peer-checked:scale-110 peer-checked:border-gray-800",
-                color_class(color)
-              ]}>
-              </div>
+        <.form for={@form} phx-target={@myself} phx-submit="save" class="space-y-4">
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              Highlight Text
             </label>
+            <textarea
+              name="annotation[content]"
+              rows="3"
+              class="textarea textarea-bordered w-full"
+              placeholder="Enter the verse text you want to highlight..."
+              required
+            >{@form[:content].value}</textarea>
+            <%= if @form[:content].errors != [] do %>
+              <p class="text-xs text-red-600 mt-1">
+                {elem(hd(@form[:content].errors), 0)}
+              </p>
+            <% else %>
+              <p class="text-xs text-gray-500 mt-1">
+                The text from the verse you're annotating (min 3 characters)
+              </p>
+            <% end %>
           </div>
-        </div>
 
-        <div class="flex gap-3 pt-4">
-          <button
-            type="button"
-            phx-click="cancel_form"
-            phx-target={@myself}
-            class="btn btn-ghost"
-          >
-            Cancel
-          </button>
-          <button type="submit" class="btn btn-primary flex-1">
-            <%= if @editing_annotation, do: "Update", else: "Save" %>
-          </button>
-        </div>
-      </.form>
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              Personal Notes (Optional)
+            </label>
+            <textarea
+              name="annotation[note]"
+              rows="5"
+              class="textarea textarea-bordered w-full"
+              placeholder="Add your personal notes, reflections, or insights..."
+            >{@form[:note].value}</textarea>
+            <p class="text-xs text-gray-500 mt-1">Your private thoughts and reflections</p>
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              Highlight Color
+            </label>
+            <div class="flex gap-3">
+              <label
+                :for={color <- ["yellow", "blue", "green", "pink", "purple"]}
+                class="cursor-pointer"
+              >
+                <input
+                  type="radio"
+                  name="annotation[color]"
+                  value={color}
+                  checked={
+                    @form[:color].value == color || (is_nil(@form[:color].value) && color == "yellow")
+                  }
+                  class="hidden peer"
+                />
+                <div class={[
+                  "w-10 h-10 rounded-full border-4 transition-all peer-checked:scale-110 peer-checked:border-gray-800",
+                  color_class(color)
+                ]}>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div class="flex gap-3 pt-4">
+            <button
+              type="button"
+              phx-click="cancel_form"
+              phx-target={@myself}
+              class="btn btn-ghost"
+            >
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary flex-1">
+              {if @editing_annotation, do: "Update", else: "Save"}
+            </button>
+          </div>
+        </.form>
       <% end %>
     </div>
     """
