@@ -64,10 +64,10 @@ defmodule AmenityWeb.SocialLive.Index do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="min-h-screen bg-base-200">
+      <div class="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
         <div class="max-w-6xl mx-auto px-4 py-6">
           <!-- Forum Header -->
-          <div class="bg-gradient-to-r from-primary to-secondary text-primary-content rounded-t-lg p-4 shadow-lg">
+          <div class="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-t-lg p-4 shadow-lg">
             <div class="flex items-center justify-between">
               <div>
                 <h1 class="text-3xl font-bold flex items-center gap-2">
@@ -101,7 +101,7 @@ defmodule AmenityWeb.SocialLive.Index do
                   <li>General Discussion</li>
                 </ul>
               </div>
-              <.link patch={~p"/social/new"} class="btn btn-primary btn-sm gap-2">
+              <.link patch={~p"/social/new"} class="btn btn-sm gap-2 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all">
                 <.icon name="hero-plus" class="w-4 h-4" />
                 New Topic
               </.link>
@@ -127,7 +127,7 @@ defmodule AmenityWeb.SocialLive.Index do
               <.icon name="hero-chat-bubble-left-right" class="w-16 h-16 mx-auto text-base-300 mb-4" />
               <h2 class="text-xl font-bold mb-2">No topics yet</h2>
               <p class="text-base-content/60 mb-4">Be the first to start a discussion!</p>
-              <.link patch={~p"/social/new"} class="btn btn-primary btn-sm">
+              <.link patch={~p"/social/new"} class="btn btn-sm bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all">
                 <.icon name="hero-plus" class="w-4 h-4" />
                 Create First Topic
               </.link>
@@ -245,7 +245,7 @@ defmodule AmenityWeb.SocialLive.Index do
                     <%= length(@posts) %> <%= if length(@posts) == 1, do: "topic", else: "topics" %>
                   </span>
                 </div>
-                <.link patch={~p"/social/new"} class="btn btn-primary btn-sm gap-2">
+                <.link patch={~p"/social/new"} class="btn btn-sm gap-2 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-lg transition-all">
                   <.icon name="hero-plus" class="w-4 h-4" />
                   New Topic
                 </.link>

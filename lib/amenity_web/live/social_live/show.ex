@@ -55,10 +55,10 @@ defmodule AmenityWeb.SocialLive.Show do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="min-h-screen bg-base-200">
+      <div class="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
         <div class="max-w-6xl mx-auto px-4 py-6">
           <!-- Forum Header -->
-          <div class="bg-gradient-to-r from-primary to-secondary text-primary-content rounded-t-lg p-4 shadow-lg">
+          <div class="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-t-lg p-4 shadow-lg">
             <div class="flex items-center justify-between">
               <div>
                 <h1 class="text-3xl font-bold flex items-center gap-2">
