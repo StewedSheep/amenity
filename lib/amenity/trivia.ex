@@ -28,10 +28,13 @@ defmodule Amenity.Trivia do
   end
 
   @doc """
-  Creates a room.
+  Creates a room. Sets allowed_user_ids to current participants in the lobby.
   """
-  def create_room(current_scope, attrs \\ %{}) do
-    attrs = Map.put(attrs, "host_id", current_scope.user.id)
+  def create_room(current_scope, attrs \\ %{}, online_user_ids \\ []) do
+    attrs = 
+      attrs
+      |> Map.put("host_id", current_scope.user.id)
+      |> Map.put("allowed_user_ids", online_user_ids)
 
     %Room{}
     |> Room.changeset(attrs)
@@ -94,25 +97,40 @@ defmodule Amenity.Trivia do
 
   @doc """
   Joins a user to a room. If the user is already in another room, they are removed from it first.
+  If the user is a host of another room, that room is disbanded.
+  Checks if user is allowed to join based on allowed_user_ids whitelist.
   """
   def join_room(current_scope, room_id) do
-    # First, remove user from any existing room they're in
-    RoomParticipant
-    |> where([p], p.user_id == ^current_scope.user.id and p.room_id != ^room_id)
-    |> Repo.delete_all()
+    # Check if user is allowed to join this room
+    room = Repo.get!(Room, room_id)
+    
+    unless Enum.empty?(room.allowed_user_ids) or current_scope.user.id in room.allowed_user_ids do
+      {:error, :not_allowed}
+    else
+      # Check if user is host of any room and delete those rooms
+      Room
+      |> where([r], r.host_id == ^current_scope.user.id and r.id != ^room_id)
+      |> Repo.delete_all()
 
-    # Then join the new room
-    %RoomParticipant{}
-    |> RoomParticipant.changeset(%{
-      room_id: room_id,
-      user_id: current_scope.user.id,
-      joined_at: DateTime.utc_now()
-    })
-    |> Repo.insert()
+      # Remove user from any existing room they're in as a participant
+      RoomParticipant
+      |> where([p], p.user_id == ^current_scope.user.id and p.room_id != ^room_id)
+      |> Repo.delete_all()
+
+      # Then join the new room
+      %RoomParticipant{}
+      |> RoomParticipant.changeset(%{
+        room_id: room_id,
+        user_id: current_scope.user.id,
+        joined_at: DateTime.utc_now()
+      })
+      |> Repo.insert()
+    end
   end
 
   @doc """
   Leaves a room. If the user is the host, deletes the entire room.
+  After a participant leaves, checks if room is empty and deletes it if so.
   """
   def leave_room(current_scope, room_id) do
     room = Repo.get(Room, room_id)
@@ -127,14 +145,42 @@ defmodule Amenity.Trivia do
 
       _room ->
         # Regular participant leaving
-        RoomParticipant
-        |> where([p], p.room_id == ^room_id and p.user_id == ^current_scope.user.id)
-        |> Repo.one()
-        |> case do
-          nil -> {:error, :not_found}
-          participant -> Repo.delete(participant)
+        result =
+          RoomParticipant
+          |> where([p], p.room_id == ^room_id and p.user_id == ^current_scope.user.id)
+          |> Repo.one()
+          |> case do
+            nil -> {:error, :not_found}
+            participant -> Repo.delete(participant)
+          end
+
+        # After participant leaves, check if room is empty
+        case result do
+          {:ok, _} ->
+            check_and_delete_empty_room(room_id)
+            result
+
+          error ->
+            error
         end
     end
+  end
+
+  # Checks if a room has no participants and deletes it if empty.
+  defp check_and_delete_empty_room(room_id) do
+    participant_count =
+      RoomParticipant
+      |> where([p], p.room_id == ^room_id)
+      |> Repo.aggregate(:count)
+
+    if participant_count == 0 do
+      case Repo.get(Room, room_id) do
+        nil -> :ok
+        room -> Repo.delete(room)
+      end
+    end
+
+    :ok
   end
 
   @doc """
@@ -247,5 +293,14 @@ defmodule Amenity.Trivia do
     RoomParticipant
     |> where([p], p.room_id == ^room_id)
     |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  Disbands all rooms hosted by a specific user (when they disconnect).
+  """
+  def disband_user_hosted_rooms(user_id) do
+    Room
+    |> where([r], r.host_id == ^user_id)
+    |> Repo.delete_all()
   end
 end

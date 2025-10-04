@@ -65,7 +65,13 @@ defmodule AmenityWeb.TriviaLive.Rooms do
 
   @impl true
   def handle_event("create_room", %{"room" => room_params}, socket) do
-    case Trivia.create_room(socket.assigns.current_scope, room_params) do
+    # Get all online user IDs from presence
+    online_user_ids =
+      Presence.list("trivia:lobby")
+      |> Map.keys()
+      |> Enum.map(&String.to_integer/1)
+    
+    case Trivia.create_room(socket.assigns.current_scope, room_params, online_user_ids) do
       {:ok, _room} ->
         Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", :room_updated)
         rooms = Trivia.list_rooms(socket.assigns.current_scope)
@@ -99,6 +105,9 @@ defmodule AmenityWeb.TriviaLive.Rooms do
           |> put_flash(:info, "Joined room successfully!")
 
         {:noreply, socket}
+
+      {:error, :not_allowed} ->
+        {:noreply, put_flash(socket, :error, "You are not allowed to join this room. Only players who were online when the room was created can join.")}
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Could not join room")}
@@ -210,7 +219,7 @@ defmodule AmenityWeb.TriviaLive.Rooms do
   end
 
   @impl true
-  def handle_info(%{event: "presence_diff"}, socket) do
+  def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff", payload: diff}, socket) do
     online_users =
       Presence.list("trivia:lobby")
       |> Map.values()
@@ -219,6 +228,18 @@ defmodule AmenityWeb.TriviaLive.Rooms do
         |> List.first()
       end)
       |> Enum.reject(&is_nil/1)
+
+    # Check for users who left (in the leaves map)
+    if map_size(diff.leaves) > 0 do
+      Enum.each(diff.leaves, fn {user_id_str, _} ->
+        user_id = String.to_integer(user_id_str)
+        # Disband any rooms hosted by users who left
+        Trivia.disband_user_hosted_rooms(user_id)
+      end)
+      
+      # Broadcast room update to refresh everyone's list
+      Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", :room_updated)
+    end
 
     {:noreply, assign(socket, :online_users, online_users)}
   end

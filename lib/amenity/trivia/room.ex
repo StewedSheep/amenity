@@ -8,6 +8,7 @@ defmodule Amenity.Trivia.Room do
     field :difficulty, :string, default: "medium"
     field :max_players, :integer, default: 10
     field :status, :string, default: "waiting"
+    field :allowed_user_ids, {:array, :integer}, default: []
 
     belongs_to :host, Amenity.Accounts.User
     has_many :participants, Amenity.Trivia.RoomParticipant
@@ -18,7 +19,7 @@ defmodule Amenity.Trivia.Room do
   @doc false
   def changeset(room, attrs) do
     room
-    |> cast(attrs, [:name, :description, :difficulty, :max_players, :status, :host_id])
+    |> cast(attrs, [:name, :description, :difficulty, :max_players, :status, :host_id, :allowed_user_ids])
     |> validate_required([:name, :host_id])
     |> validate_inclusion(:difficulty, ["easy", "medium", "hard"])
     |> validate_inclusion(:status, ["waiting", "in_progress", "completed"])
