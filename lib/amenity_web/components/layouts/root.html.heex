@@ -32,7 +32,11 @@
   </head>
   <body>
     <div class="w-full relative z-10 flex items-center gap-4 px-4 sm:px-6 lg:px-8">
-      <div class="flex-1"></div>
+      <div class="flex-1 flex justify-center">
+        <h1 class="text-4xl font-bold italic drop-shadow-lg hover:scale-105 transition-transform" style="font-family: 'Trebuchet MS', 'Verdana', 'Arial Rounded MT Bold', sans-serif; text-shadow: 2px 2px 4px rgba(0,0,0,0.1);">
+          <span class="bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">Ame</span><span class="bg-gradient-to-r from-green-500 to-green-700 bg-clip-text text-transparent">Nity</span>
+        </h1>
+      </div>
       <ul class="menu menu-horizontal flex items-center gap-4">
         <%= if @current_scope do %>
           <li>
