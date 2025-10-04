@@ -1,8 +1,6 @@
 defmodule AmenityWeb.UserLive.Login do
   use AmenityWeb, :live_view
 
-  alias Amenity.Accounts
-
   @impl true
   def render(assigns) do
     ~H"""

@@ -267,21 +267,25 @@ defmodule Amenity.Study do
       - Include verse references in questions (e.g., "In #{book} #{chapter}:1, what...")
       - Avoid vague questions like "What happened?" or "Who was there?"
       - Use concrete facts: names, numbers, specific actions, direct quotes
-      - Answers should be brief (1-3 sentences maximum)
+      - Keep questions SHORT (under 15 words)
+      - Keep answers BRIEF (1-2 sentences maximum, preferably just a few words)
+      - DO NOT use phrases like "According to your notes" or "The note says" in questions
+      - Questions should be direct and natural, as if asking about the Bible text itself
       
       GOOD examples:
       - "In Genesis 1:3, what did God say?" → "Let there be light"
-      - "How many days did God take to create the world in Genesis 1?" → "Six days, and He rested on the seventh"
+      - "How many days did creation take in Genesis 1?" → "Six days"
       
-      BAD examples (too vague):
-      - "What did God do?" → Too broad, many possible answers
-      - "What happened in this chapter?" → Not specific enough
+      BAD examples:
+      - "What did God do?" → Too vague
+      - "According to the notes, what is important about verse 3?" → Don't reference notes in question
+      - "What happened in this chapter and why is it significant?" → Too long, multiple questions
       
       Chapter text:
       #{chapter_text}#{notes_text}
       
-      IMPORTANT: If there are personal notes above, you MUST create at least one question for EACH note.
-      These notes represent what the user found important or confusing, so they need flashcards about them.
+      IMPORTANT: If there are personal notes above, create questions about the content they highlight.
+      Ask about the actual Bible content, NOT about what the notes say.
       
       Return ONLY a JSON array of objects with "front" and "back" keys.
       Example: [{"front": "In #{book} #{chapter}:1, what did God create?", "back": "The heavens and the earth"}]

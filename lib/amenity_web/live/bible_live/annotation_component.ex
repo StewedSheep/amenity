@@ -125,17 +125,6 @@ defmodule AmenityWeb.BibleLive.AnnotationComponent do
     end
   end
 
-  defp has_overlap?(annotations, new_content) do
-    new_lower = String.downcase(new_content)
-    
-    Enum.any?(annotations, fn annotation ->
-      existing_lower = String.downcase(annotation.content)
-      # Check if the new content overlaps with existing annotation content
-      String.contains?(existing_lower, new_lower) ||
-      String.contains?(new_lower, existing_lower)
-    end)
-  end
-
   defp save_annotation(socket, :edit, annotation_params) do
     case Bible.update_annotation(socket.assigns.editing_annotation, annotation_params) do
       {:ok, annotation} ->
@@ -156,6 +145,17 @@ defmodule AmenityWeb.BibleLive.AnnotationComponent do
       {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset))}
     end
+  end
+
+  defp has_overlap?(annotations, new_content) do
+    new_lower = String.downcase(new_content)
+    
+    Enum.any?(annotations, fn annotation ->
+      existing_lower = String.downcase(annotation.content)
+      # Check if the new content overlaps with existing annotation content
+      String.contains?(existing_lower, new_lower) ||
+      String.contains?(new_lower, existing_lower)
+    end)
   end
 
   defp notify_parent(msg), do: send(self(), msg)
