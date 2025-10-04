@@ -6,7 +6,7 @@ defmodule Amenity.Social do
   import Ecto.Query, warn: false
   alias Amenity.Repo
 
-  alias Amenity.Social.{Group, GroupMember, GroupInvite}
+  alias Amenity.Social.{Group, GroupMember, GroupInvite, Post, Reply}
 
   ## Groups
 
@@ -205,5 +205,153 @@ defmodule Amenity.Social do
       order_by: [desc: gi.inserted_at]
     )
     |> Repo.all()
+  end
+
+  ## Posts
+
+  @doc """
+  Creates a post.
+  """
+  def create_post(attrs, user_id) do
+    %Post{}
+    |> Post.changeset(Map.put(attrs, "user_id", user_id))
+    |> Repo.insert()
+  end
+
+  @doc """
+  Gets a single post with user and replies preloaded.
+  """
+  def get_post!(id) do
+    Post
+    |> Repo.get!(id)
+    |> Repo.preload([:user, replies: [:user]])
+  end
+
+  @doc """
+  Gets a single post with reply count.
+  """
+  def get_post_with_reply_count!(id) do
+    post = get_post!(id)
+    reply_count = count_post_replies(id)
+    Map.put(post, :reply_count, reply_count)
+  end
+
+  @doc """
+  Lists all posts (public feed) with reply counts.
+  """
+  def list_posts do
+    posts =
+      from(p in Post,
+        where: is_nil(p.group_id),
+        join: u in assoc(p, :user),
+        preload: [user: u],
+        order_by: [desc: p.inserted_at]
+      )
+      |> Repo.all()
+
+    # Add reply counts to each post
+    Enum.map(posts, fn post ->
+      reply_count = count_post_replies(post.id)
+      Map.put(post, :reply_count, reply_count)
+    end)
+  end
+
+  @doc """
+  Lists posts for a specific group.
+  """
+  def list_group_posts(group_id) do
+    from(p in Post,
+      where: p.group_id == ^group_id,
+      join: u in assoc(p, :user),
+      preload: [user: u],
+      order_by: [desc: p.inserted_at]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Updates a post and sets edited_at timestamp.
+  """
+  def update_post(%Post{} = post, attrs) do
+    post
+    |> Post.changeset(Map.put(attrs, :edited_at, DateTime.utc_now()))
+    |> Repo.update()
+  end
+
+  @doc """
+  Deletes a post.
+  """
+  def delete_post(%Post{} = post) do
+    Repo.delete(post)
+  end
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking post changes.
+  """
+  def change_post(%Post{} = post, attrs \\ %{}) do
+    Post.changeset(post, attrs)
+  end
+
+  @doc """
+  Checks if a user can edit a post (must be the author).
+  """
+  def can_edit_post?(%Post{user_id: user_id}, current_user_id) do
+    user_id == current_user_id
+  end
+
+  ## Replies
+
+  @doc """
+  Creates a reply to a post.
+  """
+  def create_reply(attrs, post_id, user_id) do
+    %Reply{}
+    |> Reply.changeset(Map.merge(attrs, %{"post_id" => post_id, "user_id" => user_id}))
+    |> Repo.insert()
+  end
+
+  @doc """
+  Updates a reply.
+  """
+  def update_reply(%Reply{} = reply, attrs) do
+    reply
+    |> Reply.changeset(Map.put(attrs, "edited_at", DateTime.utc_now()))
+    |> Repo.update()
+  end
+
+  @doc """
+  Deletes a reply.
+  """
+  def delete_reply(%Reply{} = reply) do
+    Repo.delete(reply)
+  end
+
+  @doc """
+  Gets a single reply.
+  """
+  def get_reply!(id) do
+    Repo.get!(Reply, id)
+  end
+
+  @doc """
+  Counts replies for a post.
+  """
+  def count_post_replies(post_id) do
+    from(r in Reply, where: r.post_id == ^post_id)
+    |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking reply changes.
+  """
+  def change_reply(%Reply{} = reply, attrs \\ %{}) do
+    Reply.changeset(reply, attrs)
+  end
+
+  @doc """
+  Checks if a user can edit a reply (must be the author).
+  """
+  def can_edit_reply?(%Reply{user_id: user_id}, current_user_id) do
+    user_id == current_user_id
   end
 end

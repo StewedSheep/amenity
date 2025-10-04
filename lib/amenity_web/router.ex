@@ -65,6 +65,9 @@ defmodule AmenityWeb.Router do
 
       # Social routes
       live "/social", SocialLive.Index, :index
+      live "/social/new", SocialLive.Index, :new
+      live "/social/:id", SocialLive.Show, :show
+      live "/social/:id/edit", SocialLive.Index, :edit
 
       # Study routes
       live "/study", StudyLive.Index, :index
