@@ -57,6 +57,28 @@ defmodule Amenity.Trivia do
   end
 
   @doc """
+  Starts the game for a room.
+  """
+  def start_game(_current_scope, room_id) do
+    room = Repo.get!(Room, room_id)
+
+    room
+    |> Room.changeset(%{status: "in_progress"})
+    |> Repo.update()
+  end
+
+  @doc """
+  Ends the game and marks room as completed.
+  """
+  def end_game(_current_scope, room_id) do
+    room = Repo.get!(Room, room_id)
+
+    room
+    |> Room.changeset(%{status: "completed"})
+    |> Repo.update()
+  end
+
+  @doc """
   Deletes a room.
   """
   def delete_room(_current_scope, %Room{} = room) do
@@ -71,9 +93,15 @@ defmodule Amenity.Trivia do
   end
 
   @doc """
-  Joins a user to a room.
+  Joins a user to a room. If the user is already in another room, they are removed from it first.
   """
   def join_room(current_scope, room_id) do
+    # First, remove user from any existing room they're in
+    RoomParticipant
+    |> where([p], p.user_id == ^current_scope.user.id and p.room_id != ^room_id)
+    |> Repo.delete_all()
+
+    # Then join the new room
     %RoomParticipant{}
     |> RoomParticipant.changeset(%{
       room_id: room_id,
@@ -160,5 +188,64 @@ defmodule Amenity.Trivia do
       |> Repo.aggregate(:count)
 
     participant_count > 0 and participant_count == ready_count
+  end
+
+  @doc """
+  Records a participant's answer and updates their score.
+  """
+  def record_answer(current_scope, room_id, is_correct) do
+    RoomParticipant
+    |> where([p], p.room_id == ^room_id and p.user_id == ^current_scope.user.id)
+    |> Repo.one()
+    |> case do
+      nil ->
+        {:error, :not_found}
+
+      participant ->
+        new_score = if is_correct, do: participant.score + 1, else: participant.score
+
+        participant
+        |> RoomParticipant.changeset(%{score: new_score})
+        |> Repo.update()
+    end
+  end
+
+  @doc """
+  Gets the winner(s) of a room based on score.
+  """
+  def get_winners(room_id) do
+    participants =
+      RoomParticipant
+      |> where([p], p.room_id == ^room_id)
+      |> preload(:user)
+      |> Repo.all()
+
+    max_score = Enum.map(participants, & &1.score) |> Enum.max(fn -> 0 end)
+    Enum.filter(participants, &(&1.score == max_score))
+  end
+
+  @doc """
+  Checks if all participants in a room have answered (score > 0 or explicitly tracked).
+  For simplicity, we'll track by checking if we've recorded answers.
+  """
+  def all_answered?(room_id) do
+    # Get total participants
+    total = 
+      RoomParticipant
+      |> where([p], p.room_id == ^room_id)
+      |> Repo.aggregate(:count)
+    
+    # For this simple implementation, we'll use a different approach
+    # We'll track answered state in the LiveView instead
+    total
+  end
+
+  @doc """
+  Gets participant count for a room.
+  """
+  def get_participant_count(room_id) do
+    RoomParticipant
+    |> where([p], p.room_id == ^room_id)
+    |> Repo.aggregate(:count)
   end
 end

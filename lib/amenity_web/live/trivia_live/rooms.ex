@@ -18,6 +18,11 @@ defmodule AmenityWeb.TriviaLive.Rooms do
       |> assign(:show_create_form, false)
       |> assign(:form, to_form(Trivia.change_room(%Amenity.Trivia.Room{})))
       |> assign(:online_users, [])
+      |> assign(:game_state, nil)
+      |> assign(:countdown, nil)
+      |> assign(:current_room_id, nil)
+      |> assign(:question_timer, nil)
+      |> assign(:answered_users, MapSet.new())
 
     socket =
       if connected?(socket) do
@@ -146,9 +151,62 @@ defmodule AmenityWeb.TriviaLive.Rooms do
   end
 
   @impl true
-  def handle_event("start_game", %{"room-id" => _room_id}, socket) do
-    # TODO: Implement game start logic
-    {:noreply, put_flash(socket, :info, "Game starting soon... (not implemented yet)")}
+  def handle_event("start_game", %{"room-id" => room_id}, socket) do
+    room_id = String.to_integer(room_id)
+    
+    # Start the game
+    Trivia.start_game(socket.assigns.current_scope, room_id)
+    
+    # Broadcast game start to all players
+    Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", {:game_started, room_id})
+    
+    # Start countdown for host
+    socket =
+      socket
+      |> assign(:current_room_id, room_id)
+      |> assign(:game_state, :countdown)
+      |> assign(:countdown, 3)
+    
+    # Schedule countdown ticks that will be broadcast to all
+    schedule_countdown(room_id, 3)
+    
+    {:noreply, socket}
+  end
+
+  defp schedule_countdown(room_id, count) when count > 0 do
+    Process.send_after(self(), {:broadcast_countdown, room_id, count}, 1000)
+  end
+
+  defp schedule_countdown(_room_id, _count), do: :ok
+
+  @impl true
+  def handle_event("answer_question", %{"room-id" => room_id, "answer" => answer}, socket) do
+    room_id = String.to_integer(room_id)
+    is_correct = answer == "no"
+    
+    Trivia.record_answer(socket.assigns.current_scope, room_id, is_correct)
+    
+    # Broadcast that someone answered
+    Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", {:player_answered, room_id, socket.assigns.current_scope.user.id})
+    
+    socket = assign(socket, :game_state, :answered)
+    
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("close_game", _params, socket) do
+    rooms = Trivia.list_rooms(socket.assigns.current_scope)
+    
+    socket =
+      socket
+      |> assign(:game_state, nil)
+      |> assign(:countdown, nil)
+      |> assign(:current_room_id, nil)
+      |> assign(:winners, nil)
+      |> assign(:rooms, rooms)
+    
+    {:noreply, socket}
   end
 
   @impl true
@@ -172,9 +230,248 @@ defmodule AmenityWeb.TriviaLive.Rooms do
   end
 
   @impl true
+  def handle_info({:game_started, room_id}, socket) do
+    # Check if user is in this room
+    room = Enum.find(socket.assigns.rooms, &(&1.id == room_id))
+    
+    if room && Enum.any?(room.participants, &(&1.user_id == socket.assigns.current_scope.user.id)) do
+      socket =
+        socket
+        |> assign(:current_room_id, room_id)
+        |> assign(:game_state, :countdown)
+        |> assign(:countdown, 3)
+      
+      {:noreply, socket}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_info({:broadcast_countdown, room_id, count}, socket) do
+    # Broadcast countdown update to all players
+    Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", {:countdown_update, room_id, count - 1})
+    
+    if count > 1 do
+      schedule_countdown(room_id, count - 1)
+    else
+      # Countdown finished, broadcast question start
+      Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", {:show_question, room_id})
+      # Auto-end game after 10 seconds
+      Process.send_after(self(), {:broadcast_end_game, room_id}, 10_000)
+    end
+    
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:countdown_update, room_id, new_count}, socket) do
+    if socket.assigns.current_room_id == room_id do
+      {:noreply, assign(socket, :countdown, new_count)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_info({:show_question, room_id}, socket) do
+    if socket.assigns.current_room_id == room_id do
+      socket =
+        socket
+        |> assign(:game_state, :question)
+        |> assign(:countdown, nil)
+        |> assign(:question_timer, 10)
+        |> assign(:answered_users, MapSet.new())
+      
+      # Start question timer countdown
+      Process.send_after(self(), {:question_timer_tick, room_id}, 1000)
+      
+      {:noreply, socket}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_info({:question_timer_tick, room_id}, socket) do
+    if socket.assigns.current_room_id == room_id and socket.assigns.question_timer do
+      new_timer = socket.assigns.question_timer - 1
+      
+      # Broadcast timer update to all players
+      Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", {:timer_update, room_id, new_timer})
+      
+      if new_timer > 0 do
+        Process.send_after(self(), {:question_timer_tick, room_id}, 1000)
+        {:noreply, assign(socket, :question_timer, new_timer)}
+      else
+        # Time's up, end game
+        Process.send(self(), {:broadcast_end_game, room_id}, [])
+        {:noreply, assign(socket, :question_timer, 0)}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_info({:timer_update, room_id, new_timer}, socket) do
+    if socket.assigns.current_room_id == room_id do
+      {:noreply, assign(socket, :question_timer, new_timer)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_info({:player_answered, room_id, user_id}, socket) do
+    if socket.assigns.current_room_id == room_id do
+      # Track who answered (only for host to check)
+      answered_users = MapSet.put(socket.assigns.answered_users, user_id)
+      socket = assign(socket, :answered_users, answered_users)
+      
+      # Check if everyone answered (only host checks and triggers end)
+      room = Enum.find(socket.assigns.rooms, &(&1.id == room_id))
+      
+      if room && MapSet.size(answered_users) >= length(room.participants) do
+        # Everyone answered! End game immediately
+        Process.send(self(), {:broadcast_end_game, room_id}, [])
+      end
+      
+      {:noreply, socket}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_info({:broadcast_end_game, room_id}, socket) do
+    Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", {:end_game, room_id})
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:end_game, room_id}, socket) do
+    if socket.assigns.current_room_id == room_id do
+      Trivia.end_game(socket.assigns.current_scope, room_id)
+      winners = Trivia.get_winners(room_id)
+      
+      socket =
+        socket
+        |> assign(:game_state, :results)
+        |> assign(:winners, winners)
+      
+      Phoenix.PubSub.broadcast(Amenity.PubSub, "trivia:lobby", :room_updated)
+      
+      {:noreply, socket}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
+      <!-- Game Overlay -->
+      <%= if @game_state do %>
+        <div class="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center">
+          <div class="text-center">
+            <%= cond do %>
+              <% @game_state == :countdown -> %>
+                <div class="text-white">
+                  <h2 class="text-6xl font-bold mb-8">Get Ready!</h2>
+                  <div class="text-9xl font-bold animate-pulse">{@countdown}</div>
+                </div>
+              
+              <% @game_state == :question -> %>
+                <div class="bg-white rounded-3xl p-12 max-w-2xl">
+                  <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-4xl font-bold text-gray-800">Are you gay?</h2>
+                    <div class="text-3xl font-bold text-purple-600">
+                      ⏱️ {@question_timer}s
+                    </div>
+                  </div>
+                  <div class="space-y-4">
+                    <button
+                      phx-click="answer_question"
+                      phx-value-room-id={@current_room_id}
+                      phx-value-answer="yes"
+                      class="btn btn-lg btn-error w-full text-2xl rounded-full"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      phx-click="answer_question"
+                      phx-value-room-id={@current_room_id}
+                      phx-value-answer="no"
+                      class="btn btn-lg btn-success w-full text-2xl rounded-full"
+                    >
+                      No
+                    </button>
+                  </div>
+                </div>
+              
+              <% @game_state == :answered -> %>
+                <div class="text-white">
+                  <h2 class="text-5xl font-bold mb-4">Answer Submitted!</h2>
+                  <p class="text-2xl">Waiting for other players...</p>
+                  <%= if @question_timer do %>
+                    <p class="text-xl mt-4 opacity-75">⏱️ {@question_timer}s remaining</p>
+                  <% end %>
+                </div>
+              
+              <% @game_state == :results -> %>
+                <div class="bg-white rounded-3xl p-12 max-w-2xl">
+                  <% current_user_won = Enum.any?(@winners, &(&1.user_id == @current_scope.user.id)) %>
+                  
+                  <%= if current_user_won do %>
+                    <h2 class="text-5xl font-bold mb-8 text-gray-800">🎉 Game Over! 🎉</h2>
+                    <%= if length(@winners) == 1 do %>
+                      <p class="text-4xl font-bold text-purple-600 mb-4">You Won! 🏆</p>
+                      <p class="text-2xl text-gray-600">Congratulations, champion!</p>
+                    <% else %>
+                      <p class="text-3xl mb-4">It's a tie!</p>
+                      <div class="space-y-2">
+                        <%= for winner <- @winners do %>
+                          <p class="text-2xl font-bold text-purple-600">{winner.user.username}</p>
+                        <% end %>
+                      </div>
+                    <% end %>
+                  <% else %>
+                    <h2 class="text-5xl font-bold mb-8 text-red-600">💀 You Lost 💀</h2>
+                    <p class="text-3xl font-bold text-gray-800 mb-4">You are bad and you lost.</p>
+                    <p class="text-xl text-gray-600 mb-6">Maybe try being better next time? 🤷</p>
+                    
+                    <div class="border-t-2 border-gray-200 pt-6 mt-6">
+                      <%= if length(@winners) == 1 do %>
+                        <p class="text-2xl mb-2 text-gray-600">Winner:</p>
+                        <p class="text-3xl font-bold text-purple-600">{hd(@winners).user.username}</p>
+                      <% else %>
+                        <p class="text-2xl mb-2 text-gray-600">Winners:</p>
+                        <div class="space-y-2">
+                          <%= for winner <- @winners do %>
+                            <p class="text-2xl font-bold text-purple-600">{winner.user.username}</p>
+                          <% end %>
+                        </div>
+                      <% end %>
+                    </div>
+                  <% end %>
+                  
+                  <button
+                    phx-click="close_game"
+                    class="btn btn-primary btn-lg rounded-full mt-8"
+                  >
+                    Back to Lobby
+                  </button>
+                </div>
+              
+              <% true -> %>
+                <div></div>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+
       <div class="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
         <div class="max-w-7xl mx-auto px-4 py-8">
           <!-- Header -->
