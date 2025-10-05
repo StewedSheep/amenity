@@ -15,21 +15,32 @@ defmodule AmenityWeb.BibleLive.AnnotationComponent do
      |> assign(:annotations, annotations)
      |> assign(:show_form, false)
      |> assign(:editing_annotation, nil)
+     |> assign(:selected_text, "")
      |> assign_form()}
   end
 
   defp assign_form(socket) do
     annotation = socket.assigns[:editing_annotation] || %Bible.Annotation{}
-    changeset = Bible.change_annotation(annotation)
+    # If there's selected text and we're creating a new annotation, prefill content
+    attrs = if is_nil(socket.assigns[:editing_annotation]) && socket.assigns[:selected_text] != "" do
+      %{content: socket.assigns.selected_text}
+    else
+      %{}
+    end
+    changeset = Bible.change_annotation(annotation, attrs)
     assign(socket, :form, to_form(changeset))
   end
 
   @impl true
-  def handle_event("show_form", _params, socket) do
+  def handle_event("show_form", params, socket) do
+    # Try to get selected text from params (sent by JS hook via data attribute)
+    selected_text = Map.get(params, "selected-text", "")
+    
     {:noreply,
      socket
      |> assign(:show_form, true)
      |> assign(:editing_annotation, nil)
+     |> assign(:selected_text, selected_text)
      |> assign_form()}
   end
 
@@ -241,7 +252,8 @@ defmodule AmenityWeb.BibleLive.AnnotationComponent do
         
     <!-- Add New Button -->
         <button
-          phx-click="show_form"
+          id="add-annotation-btn"
+          phx-hook="CaptureSelection"
           phx-target={@myself}
           class="btn btn-primary w-full"
         >
