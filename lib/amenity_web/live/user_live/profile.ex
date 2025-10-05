@@ -386,6 +386,20 @@ defmodule AmenityWeb.UserLive.Profile do
           description: "Reach 5000 total score"
         }
 
+      "master_curator" ->
+        %{
+          icon: "📚",
+          name: "Master Curator",
+          description: "Add your first card to the Master Deck"
+        }
+
+      "first_reader" ->
+        %{
+          icon: "📖",
+          name: "First Reader",
+          description: "Mark your first chapter as read"
+        }
+
       _ ->
         %{
           icon: "🏆",

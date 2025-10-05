@@ -2,6 +2,7 @@ defmodule AmenityWeb.BibleLive.Reader do
   use AmenityWeb, :live_view
 
   alias Amenity.Bible
+  alias Amenity.Accounts
 
   @impl true
   def mount(%{"book" => book, "chapter" => chapter}, _session, socket) do
@@ -113,6 +114,13 @@ defmodule AmenityWeb.BibleLive.Reader do
 
     case Bible.mark_chapter_as_read(user_id, socket.assigns.book, socket.assigns.chapter) do
       {:ok, _chapter_read} ->
+        # Check if this is the user's first chapter read
+        user = socket.assigns.current_scope.user
+        chapter_reads = Bible.list_chapter_reads(user_id)
+        if length(chapter_reads) == 1 and "first_reader" not in user.achievements do
+          Accounts.unlock_achievement(user, "first_reader")
+        end
+
         if socket.assigns.mark_with_flashcards do
           # Generate flashcards
           send(self(), {:generate_flashcards, user_id})

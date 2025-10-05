@@ -2,6 +2,7 @@ defmodule AmenityWeb.StudyLive.Study do
   use AmenityWeb, :live_view
 
   alias Amenity.Study
+  alias Amenity.Accounts
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -72,6 +73,13 @@ defmodule AmenityWeb.StudyLive.Study do
         {:ok, created_card} ->
           # Track the master deck card ID for this current card
           card_ids = Map.put(socket.assigns.master_deck_card_ids, current_card.id, created_card.id)
+          
+          # Unlock achievement if this is the first card added to master deck
+          user = socket.assigns.current_scope.user
+          master_deck_refreshed = Study.get_flashcard_set!(master_deck.id)
+          if length(master_deck_refreshed.flashcards) == 1 and "master_curator" not in user.achievements do
+            Accounts.unlock_achievement(user, "master_curator")
+          end
           
           {:noreply,
            socket
