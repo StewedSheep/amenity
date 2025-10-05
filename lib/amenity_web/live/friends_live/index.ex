@@ -151,10 +151,24 @@ defmodule AmenityWeb.FriendsLive.Index do
           <div :if={@search_results != []} class="space-y-2">
             <div
               :for={user <- @search_results}
-              class="flex items-center justify-between p-4 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-all"
+              class="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-all"
             >
-              <div>
+              <!-- Profile Picture -->
+              <div class="avatar">
+                <div class="w-12 h-12 rounded-full">
+                  <%= if user.profile_picture_url do %>
+                    <img src={user.profile_picture_url} alt={"#{user.username}'s profile"} />
+                  <% else %>
+                    <div class="bg-gradient-to-br from-indigo-500 to-purple-500 text-white flex items-center justify-center w-full h-full text-lg font-bold">
+                      {String.first(user.username) |> String.upcase()}
+                    </div>
+                  <% end %>
+                </div>
+              </div>
+              
+              <div class="flex-1">
                 <p class="font-semibold text-gray-800">@{user.username}</p>
+                <p class="text-xs text-gray-500">Level {user.level} · {user.xp} XP</p>
               </div>
               <%= cond do %>
                 <% already_friends?(@friends, user.id) -> %>
@@ -184,10 +198,24 @@ defmodule AmenityWeb.FriendsLive.Index do
           <div class="space-y-3">
             <div
               :for={{_friendship, user} <- @pending_requests}
-              class="flex items-center justify-between p-4 bg-yellow-50 rounded-2xl border-l-4 border-yellow-400"
+              class="flex items-center gap-3 p-4 bg-yellow-50 rounded-2xl border-l-4 border-yellow-400"
             >
-              <div>
+              <!-- Profile Picture -->
+              <div class="avatar">
+                <div class="w-12 h-12 rounded-full">
+                  <%= if user.profile_picture_url do %>
+                    <img src={user.profile_picture_url} alt={"#{user.username}'s profile"} />
+                  <% else %>
+                    <div class="bg-gradient-to-br from-yellow-500 to-orange-500 text-white flex items-center justify-center w-full h-full text-lg font-bold">
+                      {String.first(user.username) |> String.upcase()}
+                    </div>
+                  <% end %>
+                </div>
+              </div>
+              
+              <div class="flex-1">
                 <p class="font-semibold text-gray-800">@{user.username}</p>
+                <p class="text-xs text-gray-500">Level {user.level} · {user.xp} XP</p>
               </div>
               <div class="flex gap-2">
                 <button
@@ -215,11 +243,24 @@ defmodule AmenityWeb.FriendsLive.Index do
           <div class="space-y-3">
             <div
               :for={{_friendship, user} <- @sent_requests}
-              class="flex items-center justify-between p-4 bg-blue-50 rounded-2xl border-l-4 border-blue-400"
+              class="flex items-center gap-3 p-4 bg-blue-50 rounded-2xl border-l-4 border-blue-400"
             >
-              <div>
+              <!-- Profile Picture -->
+              <div class="avatar">
+                <div class="w-12 h-12 rounded-full">
+                  <%= if user.profile_picture_url do %>
+                    <img src={user.profile_picture_url} alt={"#{user.username}'s profile"} />
+                  <% else %>
+                    <div class="bg-gradient-to-br from-blue-500 to-cyan-500 text-white flex items-center justify-center w-full h-full text-lg font-bold">
+                      {String.first(user.username) |> String.upcase()}
+                    </div>
+                  <% end %>
+                </div>
+              </div>
+              
+              <div class="flex-1">
                 <p class="font-semibold text-gray-800">@{user.username}</p>
-                <p class="text-sm text-gray-500">Pending...</p>
+                <p class="text-xs text-gray-500">Level {user.level} · {user.xp} XP · Pending...</p>
               </div>
               <button
                 phx-click="cancel_request"
@@ -243,15 +284,38 @@ defmodule AmenityWeb.FriendsLive.Index do
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div
               :for={friend <- @friends}
-              class="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl hover:shadow-lg transition-all"
+              class="flex items-center gap-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl hover:shadow-lg transition-all"
             >
-              <div>
-                <p class="font-semibold text-gray-800">@{friend.username}</p>
+              <!-- Profile Picture -->
+              <div class="avatar">
+                <div class="w-16 h-16 rounded-full ring ring-primary ring-offset-2">
+                  <%= if friend.profile_picture_url do %>
+                    <img src={friend.profile_picture_url} alt={"#{friend.username}'s profile"} />
+                  <% else %>
+                    <div class="bg-gradient-to-br from-purple-500 to-pink-500 text-white flex items-center justify-center w-full h-full text-2xl font-bold">
+                      {String.first(friend.username) |> String.upcase()}
+                    </div>
+                  <% end %>
+                </div>
               </div>
+              
+              <!-- Friend Info -->
+              <div class="flex-1 min-w-0">
+                <p class="font-bold text-gray-800 text-lg truncate">@{friend.username}</p>
+                <div class="flex items-center gap-2 mt-1">
+                  <span class="badge badge-primary badge-sm">Level {friend.level}</span>
+                  <span class="badge badge-secondary badge-sm">{friend.xp} XP</span>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">
+                  Member since {Calendar.strftime(friend.inserted_at, "%b %Y")}
+                </p>
+              </div>
+              
+              <!-- Remove Button -->
               <button
                 phx-click="remove_friend"
                 phx-value-user_id={friend.id}
-                class="btn btn-sm btn-ghost text-red-500 hover:bg-red-100 rounded-full"
+                class="btn btn-sm btn-ghost text-red-500 hover:bg-red-100 rounded-full shrink-0"
               >
                 Remove
               </button>
