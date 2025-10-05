@@ -22,6 +22,8 @@ defmodule AmenityWeb.BibleLive.Reader do
       |> assign(:generating_flashcards, false)
       |> assign(:show_action_menu, false)
       |> assign(:mark_with_flashcards, true)
+      |> assign(:generated_flashcard_set, nil)
+      |> assign(:show_flashcard_preview, false)
 
     if connected?(socket) do
       send(self(), :load_chapter)
@@ -157,10 +159,15 @@ defmodule AmenityWeb.BibleLive.Reader do
            socket.assigns.verses,
            socket.assigns.annotations
          ) do
-      {:ok, _flashcard_set} ->
+      {:ok, flashcard_set} ->
+        # Reload with flashcards preloaded
+        flashcard_set = Amenity.Study.get_flashcard_set!(flashcard_set.id)
+        
         {:noreply,
          socket
          |> assign(:generating_flashcards, false)
+         |> assign(:generated_flashcard_set, flashcard_set)
+         |> assign(:show_flashcard_preview, true)
          |> put_flash(:info, "✨ Flashcards generated successfully!")}
 
       {:error, reason} ->
@@ -172,6 +179,37 @@ defmodule AmenityWeb.BibleLive.Reader do
          |> assign(:generating_flashcards, false)
          |> put_flash(:error, "Failed to generate flashcards")}
     end
+  end
+
+  def handle_event("close_flashcard_preview", _params, socket) do
+    {:noreply, assign(socket, :show_flashcard_preview, false)}
+  end
+
+  def handle_event("add_card_to_set", %{"card_id" => card_id, "value" => set_id}, socket) when set_id != "" do
+    card = Enum.find(socket.assigns.generated_flashcard_set.flashcards, fn c -> 
+      c.id == String.to_integer(card_id) 
+    end)
+    
+    if card do
+      case Amenity.Study.create_flashcard(%{
+        flashcard_set_id: String.to_integer(set_id),
+        front: card.front,
+        back: card.back,
+        position: 0
+      }) do
+        {:ok, _} ->
+          {:noreply, put_flash(socket, :info, "✨ Card added to set!")}
+        
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Could not add card")}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("add_card_to_set", _params, socket) do
+    {:noreply, socket}
   end
 
   def handle_event("next_chapter", _params, socket) do
@@ -266,7 +304,6 @@ defmodule AmenityWeb.BibleLive.Reader do
                           "p-3 rounded-lg border-l-4",
                           annotation_color_class(annotation.color)
                         ]}>
-                          <p class="text-sm font-semibold text-gray-700 mb-1">📝 Note:</p>
                           <p class="text-sm text-gray-600 italic">{annotation.note}</p>
                         </div>
                       <% end %>
@@ -346,6 +383,75 @@ defmodule AmenityWeb.BibleLive.Reader do
           <% end %>
         <% end %>
       </div>
+
+      <!-- Flashcard Preview Modal -->
+      <%= if @show_flashcard_preview && @generated_flashcard_set do %>
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4" phx-click="close_flashcard_preview">
+          <div class="bg-white rounded-3xl p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" phx-click={JS.exec("phx-click", to: "#flashcard-preview-content")}>
+            <div id="flashcard-preview-content">
+              <div class="flex justify-between items-start mb-6">
+                <div>
+                  <h2 class="text-3xl font-bold text-gray-800 mb-2">Generated Flashcards</h2>
+                  <p class="text-gray-600">{@generated_flashcard_set.name} • {length(@generated_flashcard_set.flashcards)} cards</p>
+                </div>
+                <button
+                  phx-click="close_flashcard_preview"
+                  class="text-gray-400 hover:text-gray-600 text-2xl"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <!-- Flashcard Grid -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <%= for card <- @generated_flashcard_set.flashcards do %>
+                  <div class="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-6 border-2 border-blue-200">
+                    <div class="mb-4">
+                      <div class="text-xs font-semibold text-blue-600 mb-2">QUESTION</div>
+                      <div class="text-gray-800 font-medium">{card.front}</div>
+                    </div>
+                    <div class="mb-4">
+                      <div class="text-xs font-semibold text-purple-600 mb-2">ANSWER</div>
+                      <div class="text-gray-700">{card.back}</div>
+                    </div>
+                    
+                    <!-- Add to Set Dropdown -->
+                    <div class="pt-4 border-t border-blue-200">
+                      <select
+                        phx-change="add_card_to_set"
+                        phx-value-card_id={card.id}
+                        class="select select-sm select-bordered w-full"
+                      >
+                        <option value="">➕ Add to another set...</option>
+                        <%= for set <- Amenity.Study.list_flashcard_sets(@current_scope.user.id) do %>
+                          <%= if set.id != @generated_flashcard_set.id do %>
+                            <option value={set.id}>{set.name}</option>
+                          <% end %>
+                        <% end %>
+                      </select>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+
+              <div class="flex gap-3">
+                <button
+                  phx-click="close_flashcard_preview"
+                  class="btn btn-ghost flex-1"
+                >
+                  Close
+                </button>
+                <.link
+                  navigate={~p"/study/flashcards/#{@generated_flashcard_set.id}"}
+                  class="btn btn-primary flex-1"
+                >
+                  View Full Set →
+                </.link>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% end %>
     </div>
     """
   end

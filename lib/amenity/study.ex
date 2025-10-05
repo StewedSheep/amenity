@@ -11,14 +11,63 @@ defmodule Amenity.Study do
 
   @doc """
   Returns the list of flashcard sets for a user.
+  Ensures the user has a master set.
   """
   def list_flashcard_sets(user_id) do
+    ensure_master_set(user_id)
+    
     from(s in FlashcardSet,
       where: s.user_id == ^user_id,
       order_by: [desc: s.updated_at],
       preload: [:flashcards]
     )
     |> Repo.all()
+  end
+
+  @doc """
+  Ensures a user has a master flashcard set with default cards.
+  """
+  def ensure_master_set(user_id) do
+    # Check if user already has a master set
+    existing = Repo.one(
+      from s in FlashcardSet,
+      where: s.user_id == ^user_id and s.name == "📚 Master Set"
+    )
+
+    if is_nil(existing) do
+      create_master_set(user_id)
+    end
+  end
+
+  defp create_master_set(user_id) do
+    {:ok, set} = create_flashcard_set(%{
+      user_id: user_id,
+      name: "📚 Master Set",
+      description: "Essential Bible knowledge flashcards"
+    })
+
+    # Create default master flashcards
+    master_cards = [
+      %{front: "Who is the author of the Gospel of John?", back: "The Apostle John"},
+      %{front: "What is the first book of the Bible?", back: "Genesis"},
+      %{front: "What is the last book of the Bible?", back: "Revelation"},
+      %{front: "How many books are in the Bible?", back: "66 books (39 Old Testament, 27 New Testament)"},
+      %{front: "What is the shortest verse in the Bible?", back: "\"Jesus wept.\" (John 11:35)"},
+      %{front: "Who built the ark?", back: "Noah"},
+      %{front: "Who was the first king of Israel?", back: "Saul"},
+      %{front: "Who was the strongest man in the Bible?", back: "Samson"},
+      %{front: "Who was swallowed by a great fish?", back: "Jonah"},
+      %{front: "What are the fruits of the Spirit?", back: "Love, joy, peace, patience, kindness, goodness, faithfulness, gentleness, self-control (Galatians 5:22-23)"}
+    ]
+
+    Enum.with_index(master_cards, fn card, index ->
+      create_flashcard(Map.merge(card, %{
+        flashcard_set_id: set.id,
+        position: index
+      }))
+    end)
+
+    set
   end
 
   @doc """
@@ -151,23 +200,35 @@ defmodule Amenity.Study do
     |> Repo.insert_or_update()
   end
 
-  # SM-2 Algorithm implementation
+  # SM-2 Algorithm implementation with shorter intervals
+  # Again: 5 minutes, Hard: 1 day, Good: 3 days, Easy: 7 days
   defp calculate_sm2(ease_factor, interval, repetitions, quality) do
     new_ease_factor = max(1.3, ease_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)))
 
     {new_interval, new_repetitions} = cond do
+      # Again (quality 0-2) - 5 minutes
       quality < 3 ->
-        # Failed - reset
-        {1, 0}
+        {0.0035, 0}  # 0.0035 days = ~5 minutes
       
-      repetitions == 0 ->
-        {1, 1}
+      # Hard (quality 3) - 1 day
+      quality == 3 ->
+        {1, repetitions + 1}
       
-      repetitions == 1 ->
-        {6, 2}
+      # Good (quality 4) - 3 days base
+      quality == 4 ->
+        if repetitions == 0 do
+          {3, 1}
+        else
+          {round(interval * 1.5), repetitions + 1}
+        end
       
+      # Easy (quality 5) - 7 days base
       true ->
-        {round(interval * new_ease_factor), repetitions + 1}
+        if repetitions == 0 do
+          {7, 1}
+        else
+          {round(interval * new_ease_factor), repetitions + 1}
+        end
     end
 
     {new_ease_factor, new_interval, new_repetitions}
@@ -184,7 +245,8 @@ defmodule Amenity.Study do
     case create_flashcard_set(%{
            user_id: user_id,
            name: set_name,
-           description: set_description
+           description: set_description,
+           ai_generated: true
          }) do
       {:ok, flashcard_set} ->
         case call_openai_for_flashcards(book, chapter, verses, annotations) do
@@ -264,31 +326,34 @@ defmodule Amenity.Study do
       
       REQUIREMENTS:
       - Questions must be SPECIFIC and have only ONE correct answer
-      - Include verse references in questions (e.g., "In #{book} #{chapter}:1, what...")
-      - Avoid vague questions like "What happened?" or "Who was there?"
+      - Include verse references AND context in questions (e.g., "When God said 'Let there be light' in Genesis 1:3, what happened?")
+      - Provide enough context so the question makes sense on its own WITHOUT looking up the verse
+      - Avoid vague questions like "What happened in this verse?" or "Who was there?"
       - Use concrete facts: names, numbers, specific actions, direct quotes
-      - Keep questions SHORT (under 15 words)
+      - Keep questions CLEAR but contextual (15-25 words is fine if needed for clarity)
       - Keep answers BRIEF (1-2 sentences maximum, preferably just a few words)
       - DO NOT use phrases like "According to your notes" or "The note says" in questions
       - Questions should be direct and natural, as if asking about the Bible text itself
       
-      GOOD examples:
-      - "In Genesis 1:3, what did God say?" → "Let there be light"
-      - "How many days did creation take in Genesis 1?" → "Six days"
+      GOOD examples (notice the context):
+      - "When God spoke on the first day of creation in Genesis 1:3, what did He say?" → "Let there be light"
+      - "After God created light and darkness in Genesis 1, what did He call them?" → "Day and night"
+      - "How many days did God work before resting in Genesis 1?" → "Six days"
       
       BAD examples:
-      - "What did God do?" → Too vague
-      - "According to the notes, what is important about verse 3?" → Don't reference notes in question
-      - "What happened in this chapter and why is it significant?" → Too long, multiple questions
+      - "What did God do in this verse?" → Too vague, no context
+      - "What happened in Genesis 1:3?" → No context about what's being asked
+      - "According to the notes, what is important?" → Don't reference notes
       
       Chapter text:
       #{chapter_text}#{notes_text}
       
       IMPORTANT: If there are personal notes above, create questions about the content they highlight.
       Ask about the actual Bible content, NOT about what the notes say.
+      Include enough context from the surrounding verses so questions are clear and self-contained.
       
       Return ONLY a JSON array of objects with "front" and "back" keys.
-      Example: [{"front": "In #{book} #{chapter}:1, what did God create?", "back": "The heavens and the earth"}]
+      Example: [{"front": "When God began creating in Genesis 1:1, what did He create?", "back": "The heavens and the earth"}]
       """
 
       body = %{

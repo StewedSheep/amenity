@@ -22,7 +22,9 @@ defmodule AmenityWeb.StudyLive.FlashcardSet do
        |> assign(:flashcard_set, flashcard_set)
        |> assign(:stats, stats)
        |> assign(:show_add_card_modal, false)
-       |> assign(:editing_card, nil)}
+       |> assign(:editing_card, nil)
+       |> assign(:show_edit_set_modal, false)
+       |> assign(:show_delete_confirm, false)}
     end
   end
 
@@ -38,8 +40,54 @@ defmodule AmenityWeb.StudyLive.FlashcardSet do
     {:noreply, assign(socket, :show_add_card_modal, false)}
   end
 
+  def handle_event("show_edit_set_modal", _params, socket) do
+    {:noreply, assign(socket, :show_edit_set_modal, true)}
+  end
+
+  def handle_event("hide_edit_set_modal", _params, socket) do
+    {:noreply, assign(socket, :show_edit_set_modal, false)}
+  end
+
+  def handle_event("show_delete_confirm", _params, socket) do
+    {:noreply, assign(socket, :show_delete_confirm, true)}
+  end
+
+  def handle_event("hide_delete_confirm", _params, socket) do
+    {:noreply, assign(socket, :show_delete_confirm, false)}
+  end
+
   def handle_event("modal_content_click", _params, socket) do
     {:noreply, socket}
+  end
+
+  def handle_event("update_set", %{"name" => name, "description" => description}, socket) do
+    case Study.update_flashcard_set(socket.assigns.flashcard_set, %{
+      name: name,
+      description: description
+    }) do
+      {:ok, flashcard_set} ->
+        {:noreply,
+         socket
+         |> assign(:flashcard_set, flashcard_set)
+         |> assign(:show_edit_set_modal, false)
+         |> put_flash(:info, "Set updated!")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Could not update set")}
+    end
+  end
+
+  def handle_event("delete_set", _params, socket) do
+    case Study.delete_flashcard_set(socket.assigns.flashcard_set) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Set deleted!")
+         |> push_navigate(to: ~p"/study/flashcards")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Could not delete set")}
+    end
   end
 
   def handle_event("edit_card", %{"id" => id}, socket) do
@@ -120,8 +168,24 @@ defmodule AmenityWeb.StudyLive.FlashcardSet do
             ← Back to Flashcards
           </.link>
           <div class="flex justify-between items-start">
-            <div>
-              <h1 class="text-4xl font-bold text-gray-800 mb-2">{@flashcard_set.name}</h1>
+            <div class="flex-1">
+              <div class="flex items-center gap-3 mb-2">
+                <h1 class="text-4xl font-bold text-gray-800">{@flashcard_set.name}</h1>
+                <button
+                  phx-click="show_edit_set_modal"
+                  class="btn btn-sm btn-ghost text-gray-600 hover:text-gray-800"
+                  title="Edit set"
+                >
+                  ✏️
+                </button>
+                <button
+                  phx-click="show_delete_confirm"
+                  class="btn btn-sm btn-ghost text-red-600 hover:text-red-800"
+                  title="Delete set"
+                >
+                  🗑️
+                </button>
+              </div>
               <%= if @flashcard_set.description do %>
                 <p class="text-gray-600 text-lg">{@flashcard_set.description}</p>
               <% end %>
@@ -257,6 +321,69 @@ defmodule AmenityWeb.StudyLive.FlashcardSet do
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      <% end %>
+
+      <!-- Edit Set Modal -->
+      <%= if @show_edit_set_modal do %>
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" phx-click="hide_edit_set_modal">
+          <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl" phx-click="modal_content_click">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">Edit Flashcard Set</h2>
+            
+            <form phx-submit="update_set" class="space-y-4">
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Set Name</label>
+                <input
+                  type="text"
+                  name="name"
+                  required
+                  value={@flashcard_set.name}
+                  class="input input-bordered w-full"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Description (Optional)</label>
+                <textarea
+                  name="description"
+                  rows="3"
+                  class="textarea textarea-bordered w-full"
+                >{@flashcard_set.description}</textarea>
+              </div>
+
+              <div class="flex gap-3 pt-4">
+                <button type="button" phx-click="hide_edit_set_modal" class="btn btn-ghost flex-1">
+                  Cancel
+                </button>
+                <button type="submit" class="btn btn-primary flex-1">
+                  Update Set
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      <% end %>
+
+      <!-- Delete Confirmation Modal -->
+      <%= if @show_delete_confirm do %>
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" phx-click="hide_delete_confirm">
+          <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl" phx-click="modal_content_click">
+            <h2 class="text-2xl font-bold text-red-600 mb-4">Delete Flashcard Set?</h2>
+            <p class="text-gray-700 mb-6">
+              Are you sure you want to delete "<strong>{@flashcard_set.name}</strong>"? 
+              This will permanently delete all {length(@flashcard_set.flashcards)} cards in this set.
+              This action cannot be undone.
+            </p>
+
+            <div class="flex gap-3">
+              <button type="button" phx-click="hide_delete_confirm" class="btn btn-ghost flex-1">
+                Cancel
+              </button>
+              <button phx-click="delete_set" class="btn bg-red-600 hover:bg-red-700 text-white flex-1">
+                Delete Set
+              </button>
+            </div>
           </div>
         </div>
       <% end %>

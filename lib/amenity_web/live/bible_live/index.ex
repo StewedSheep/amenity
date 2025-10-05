@@ -22,7 +22,7 @@ defmodule AmenityWeb.BibleLive.Index do
   def handle_info(:load_books, socket) do
     {:ok, books} = Bible.fetch_books()
     user_id = socket.assigns.current_scope.user.id
-    chapter_reads = Bible.list_user_chapter_reads(user_id)
+    chapter_reads = Bible.list_chapter_reads(user_id)
 
     # Create a map for quick lookup
     reads_map =

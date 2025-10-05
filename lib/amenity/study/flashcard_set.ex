@@ -7,6 +7,7 @@ defmodule Amenity.Study.FlashcardSet do
     field :name, :string
     field :description, :string
     field :is_public, :boolean, default: false
+    field :ai_generated, :boolean, default: false
 
     has_many :flashcards, Amenity.Study.Flashcard
 
@@ -16,7 +17,7 @@ defmodule Amenity.Study.FlashcardSet do
   @doc false
   def changeset(flashcard_set, attrs) do
     flashcard_set
-    |> cast(attrs, [:user_id, :name, :description, :is_public])
+    |> cast(attrs, [:user_id, :name, :description, :is_public, :ai_generated])
     |> validate_required([:user_id, :name])
     |> validate_length(:name, min: 1, max: 255)
   end

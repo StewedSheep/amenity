@@ -17,6 +17,9 @@ defmodule AmenityWeb.StudyLive.Study do
     else
       # Get cards due for review
       due_cards = Study.get_due_flashcards(user_id, String.to_integer(id))
+      
+      # Get all user's flashcard sets for copying
+      all_sets = Study.list_flashcard_sets(user_id)
 
       if due_cards == [] do
         {:ok,
@@ -27,11 +30,14 @@ defmodule AmenityWeb.StudyLive.Study do
         {:ok,
          socket
          |> assign(:flashcard_set, flashcard_set)
+         |> assign(:all_sets, all_sets)
          |> assign(:due_cards, due_cards)
          |> assign(:current_index, 0)
          |> assign(:show_answer, false)
          |> assign(:cards_reviewed, 0)
-         |> assign(:session_complete, false)}
+         |> assign(:session_complete, false)
+         |> assign(:show_edit_modal, false)
+         |> assign(:editing_card, nil)}
       end
     end
   end
@@ -39,6 +45,64 @@ defmodule AmenityWeb.StudyLive.Study do
   @impl true
   def handle_event("show_answer", _params, socket) do
     {:noreply, assign(socket, :show_answer, true)}
+  end
+
+  def handle_event("show_edit_modal", _params, socket) do
+    current_card = Enum.at(socket.assigns.due_cards, socket.assigns.current_index)
+    
+    {:noreply,
+     socket
+     |> assign(:show_edit_modal, true)
+     |> assign(:editing_card, current_card)}
+  end
+
+  def handle_event("hide_edit_modal", _params, socket) do
+    {:noreply, assign(socket, :show_edit_modal, false)}
+  end
+
+  def handle_event("update_card", %{"front" => front, "back" => back}, socket) do
+    case Study.update_flashcard(socket.assigns.editing_card, %{front: front, back: back}) do
+      {:ok, updated_card} ->
+        # Update the card in the due_cards list
+        updated_due_cards =
+          Enum.map(socket.assigns.due_cards, fn card ->
+            if card.id == updated_card.id, do: updated_card, else: card
+          end)
+
+        {:noreply,
+         socket
+         |> assign(:due_cards, updated_due_cards)
+         |> assign(:show_edit_modal, false)
+         |> put_flash(:info, "Card updated!")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Could not update card")}
+    end
+  end
+
+  def handle_event("modal_content_click", _params, socket) do
+    {:noreply, socket}
+  end
+
+  def handle_event("copy_to_set", %{"value" => set_id}, socket) when set_id != "" do
+    current_card = Enum.at(socket.assigns.due_cards, socket.assigns.current_index)
+    
+    case Study.create_flashcard(%{
+      flashcard_set_id: String.to_integer(set_id),
+      front: current_card.front,
+      back: current_card.back,
+      position: 0
+    }) do
+      {:ok, _} ->
+        {:noreply, put_flash(socket, :info, "✨ Card copied to set!")}
+      
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Could not copy card")}
+    end
+  end
+
+  def handle_event("copy_to_set", _params, socket) do
+    {:noreply, socket}
   end
 
   def handle_event("rate", %{"quality" => quality_str}, socket) do
@@ -125,7 +189,32 @@ defmodule AmenityWeb.StudyLive.Study do
           </div>
           
     <!-- Flashcard -->
-          <div class="bg-white rounded-3xl shadow-2xl p-12 mb-8 min-h-[400px] flex flex-col justify-center">
+          <div class="bg-white rounded-3xl shadow-2xl p-12 mb-8 min-h-[400px] flex flex-col justify-center relative">
+            <!-- Action Buttons -->
+            <div class="absolute top-4 right-4 flex gap-2">
+              <!-- Copy to Set Dropdown -->
+              <select
+                phx-change="copy_to_set"
+                class="select select-sm select-bordered"
+              >
+                <option value="">📋 Copy to...</option>
+                <%= for set <- @all_sets do %>
+                  <%= if set.id != @flashcard_set.id do %>
+                    <option value={set.id}>{set.name}</option>
+                  <% end %>
+                <% end %>
+              </select>
+              
+              <!-- Edit Button -->
+              <button
+                phx-click="show_edit_modal"
+                class="btn btn-sm btn-ghost text-gray-600 hover:text-gray-800"
+                title="Edit card"
+              >
+                ✏️
+              </button>
+            </div>
+            
             <div class="text-center">
               <div class="text-sm font-semibold text-gray-500 mb-4">
                 {if @show_answer, do: "ANSWER", else: "QUESTION"}
@@ -216,6 +305,48 @@ defmodule AmenityWeb.StudyLive.Study do
     <!-- Keyboard Shortcuts Hint -->
           <div class="text-center mt-8 text-sm text-gray-500">
             <p>💡 Tip: Rate your recall honestly for optimal learning</p>
+          </div>
+        <% end %>
+
+        <!-- Edit Card Modal -->
+        <%= if @show_edit_modal && @editing_card do %>
+          <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" phx-click="hide_edit_modal">
+            <div class="bg-white rounded-2xl p-8 max-w-2xl w-full mx-4 shadow-2xl" phx-click="modal_content_click">
+              <h2 class="text-2xl font-bold text-gray-800 mb-6">Edit Flashcard</h2>
+              
+              <form phx-submit="update_card" class="space-y-4">
+                <div>
+                  <label class="block text-sm font-semibold text-gray-700 mb-2">Question (Front)</label>
+                  <textarea
+                    name="front"
+                    required
+                    rows="3"
+                    class="textarea textarea-bordered w-full"
+                    placeholder="What is the question?"
+                  >{@editing_card.front}</textarea>
+                </div>
+
+                <div>
+                  <label class="block text-sm font-semibold text-gray-700 mb-2">Answer (Back)</label>
+                  <textarea
+                    name="back"
+                    required
+                    rows="3"
+                    class="textarea textarea-bordered w-full"
+                    placeholder="What is the answer?"
+                  >{@editing_card.back}</textarea>
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                  <button type="button" phx-click="hide_edit_modal" class="btn btn-ghost flex-1">
+                    Cancel
+                  </button>
+                  <button type="submit" class="btn btn-primary flex-1">
+                    Update Card
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         <% end %>
       </div>

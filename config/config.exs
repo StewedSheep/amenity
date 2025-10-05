@@ -24,6 +24,20 @@ config :amenity,
   ecto_repos: [Amenity.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+# Configure Oban
+config :amenity, Oban,
+  repo: Amenity.Repo,
+  plugins: [
+    {Oban.Plugins.Cron,
+     crontab: [
+       # Run cleanup every hour
+       {"0 * * * *", Amenity.Workers.CleanupAiFlashcardsWorker},
+       # Run trivia room cleanup every minute (fastest cron allows)
+       {"* * * * *", Amenity.Workers.CleanupTriviaRoomsWorker}
+     ]}
+  ],
+  queues: [default: 10]
+
 # Configures the endpoint
 config :amenity, AmenityWeb.Endpoint,
   url: [host: "localhost"],

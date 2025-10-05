@@ -12,6 +12,14 @@ defmodule Amenity.Application do
       Amenity.Repo,
       {DNSCluster, query: Application.get_env(:amenity, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Amenity.PubSub},
+      # Start Presence
+      AmenityWeb.Presence,
+      # Start Game Registry
+      {Registry, keys: :unique, name: Amenity.Trivia.GameRegistry},
+      # Start Game Supervisor
+      {DynamicSupervisor, strategy: :one_for_one, name: Amenity.Trivia.GameSupervisor},
+      # Start Oban
+      {Oban, Application.fetch_env!(:amenity, Oban)},
       # Start a worker by calling: Amenity.Worker.start_link(arg)
       # {Amenity.Worker, arg},
       # Start to serve requests, typically the last entry

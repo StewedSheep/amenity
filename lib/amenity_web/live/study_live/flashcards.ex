@@ -8,10 +8,15 @@ defmodule AmenityWeb.StudyLive.Flashcards do
     user_id = socket.assigns.current_scope.user.id
     flashcard_sets = Study.list_flashcard_sets(user_id)
 
+    # Separate AI-generated and user-created sets
+    {ai_sets, user_sets} = Enum.split_with(flashcard_sets, fn set -> set.ai_generated end)
+
     {:ok,
      socket
-     |> assign(:flashcard_sets, flashcard_sets)
-     |> assign(:show_create_modal, false)}
+     |> assign(:ai_sets, ai_sets)
+     |> assign(:user_sets, user_sets)
+     |> assign(:show_create_modal, false)
+     |> assign(:deleting_set_id, nil)}
   end
 
   @impl true
@@ -23,6 +28,36 @@ defmodule AmenityWeb.StudyLive.Flashcards do
     {:noreply, assign(socket, :show_create_modal, false)}
   end
 
+  def handle_event("show_delete_confirm", %{"id" => id}, socket) do
+    {:noreply, assign(socket, :deleting_set_id, String.to_integer(id))}
+  end
+
+  def handle_event("hide_delete_confirm", _params, socket) do
+    {:noreply, assign(socket, :deleting_set_id, nil)}
+  end
+
+  def handle_event("delete_set", %{"id" => id}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+    all_sets = socket.assigns.ai_sets ++ socket.assigns.user_sets
+    set = Enum.find(all_sets, fn s -> s.id == String.to_integer(id) end)
+
+    case Study.delete_flashcard_set(set) do
+      {:ok, _} ->
+        flashcard_sets = Study.list_flashcard_sets(user_id)
+        {ai_sets, user_sets} = Enum.split_with(flashcard_sets, fn s -> s.ai_generated end)
+
+        {:noreply,
+         socket
+         |> assign(:ai_sets, ai_sets)
+         |> assign(:user_sets, user_sets)
+         |> assign(:deleting_set_id, nil)
+         |> put_flash(:info, "Set deleted!")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Could not delete set")}
+    end
+  end
+
   def handle_event("modal_content_click", _params, socket) do
     # Do nothing - prevents click from bubbling to background
     {:noreply, socket}
@@ -30,26 +65,27 @@ defmodule AmenityWeb.StudyLive.Flashcards do
 
   def handle_event("create_set", %{"name" => name, "description" => description}, socket) do
     user_id = socket.assigns.current_scope.user.id
-
     case Study.create_flashcard_set(%{
       user_id: user_id,
       name: name,
       description: description
     }) do
-      {:ok, _set} ->
+      {:ok, flashcard_set} ->
         flashcard_sets = Study.list_flashcard_sets(user_id)
+        {ai_sets, user_sets} = Enum.split_with(flashcard_sets, fn s -> s.ai_generated end)
 
         {:noreply,
          socket
-         |> assign(:flashcard_sets, flashcard_sets)
+         |> assign(:ai_sets, ai_sets)
+         |> assign(:user_sets, user_sets)
          |> assign(:show_create_modal, false)
-         |> put_flash(:info, "Flashcard set created!")}
+         |> put_flash(:info, "Flashcard set created!")
+         |> push_navigate(to: ~p"/study/flashcards/#{flashcard_set.id}")}
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Could not create flashcard set")}
     end
   end
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -77,7 +113,7 @@ defmodule AmenityWeb.StudyLive.Flashcards do
         </div>
 
         <!-- Flashcard Sets Grid -->
-        <%= if @flashcard_sets == [] do %>
+        <%= if @ai_sets == [] && @user_sets == [] do %>
           <div class="text-center py-20 bg-white rounded-3xl shadow-lg">
             <div class="text-6xl mb-4">🎴</div>
             <p class="text-2xl text-gray-600 mb-4">No flashcard sets yet</p>
@@ -90,23 +126,76 @@ defmodule AmenityWeb.StudyLive.Flashcards do
             </button>
           </div>
         <% else %>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <%= for set <- @flashcard_sets do %>
-              <.link
-                navigate={~p"/study/flashcards/#{set.id}"}
-                class="bg-white rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all hover:scale-105 border-t-4 border-blue-400"
-              >
-                <h3 class="text-xl font-bold text-gray-800 mb-2">{set.name}</h3>
-                <%= if set.description do %>
-                  <p class="text-gray-600 text-sm mb-4 line-clamp-2">{set.description}</p>
+          <!-- AI-Generated Sets Section -->
+          <%= if @ai_sets != [] do %>
+            <div class="mb-12">
+              <div class="flex items-center gap-3 mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">🤖 AI-Generated Sets</h2>
+                <span class="badge badge-primary">{length(@ai_sets)}</span>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <%= for set <- @ai_sets do %>
+                  <div class="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all border-t-4 border-blue-400 relative group">
+                    <div class="absolute top-2 right-2 badge badge-sm bg-blue-500 text-white">AI</div>
+                    <button
+                      phx-click="show_delete_confirm"
+                      phx-value-id={set.id}
+                      class="absolute top-4 right-12 btn btn-sm btn-ghost text-red-600 hover:text-red-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Delete set"
+                    >
+                      🗑️
+                    </button>
+                    
+                    <.link navigate={~p"/study/flashcards/#{set.id}"} class="block">
+                      <h3 class="text-xl font-bold text-gray-800 mb-2 pr-16">{set.name}</h3>
+                      <%= if set.description do %>
+                        <p class="text-gray-600 text-sm mb-4 line-clamp-2">{set.description}</p>
+                      <% end %>
+                      <div class="flex items-center justify-between text-sm text-gray-500 mt-4">
+                        <span>🎴 {length(set.flashcards)} cards</span>
+                        <span class="text-blue-600 font-semibold">Study →</span>
+                      </div>
+                    </.link>
+                  </div>
                 <% end %>
-                <div class="flex items-center justify-between text-sm text-gray-500 mt-4">
-                  <span>🎴 {length(set.flashcards)} cards</span>
-                  <span class="text-blue-600 font-semibold">Study →</span>
-                </div>
-              </.link>
-            <% end %>
-          </div>
+              </div>
+            </div>
+          <% end %>
+
+          <!-- User-Created Sets Section -->
+          <%= if @user_sets != [] do %>
+            <div>
+              <div class="flex items-center gap-3 mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">✏️ Your Sets</h2>
+                <span class="badge badge-secondary">{length(@user_sets)}</span>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <%= for set <- @user_sets do %>
+                  <div class="bg-white rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all border-t-4 border-green-400 relative group">
+                    <button
+                      phx-click="show_delete_confirm"
+                      phx-value-id={set.id}
+                      class="absolute top-4 right-4 btn btn-sm btn-ghost text-red-600 hover:text-red-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Delete set"
+                    >
+                      🗑️
+                    </button>
+                    
+                    <.link navigate={~p"/study/flashcards/#{set.id}"} class="block">
+                      <h3 class="text-xl font-bold text-gray-800 mb-2 pr-8">{set.name}</h3>
+                      <%= if set.description do %>
+                        <p class="text-gray-600 text-sm mb-4 line-clamp-2">{set.description}</p>
+                      <% end %>
+                      <div class="flex items-center justify-between text-sm text-gray-500 mt-4">
+                        <span>🎴 {length(set.flashcards)} cards</span>
+                        <span class="text-green-600 font-semibold">Study →</span>
+                      </div>
+                    </.link>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
         <% end %>
 
         <!-- Info Section -->
@@ -169,6 +258,31 @@ defmodule AmenityWeb.StudyLive.Flashcards do
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      <% end %>
+
+      <!-- Delete Confirmation Modal -->
+      <%= if @deleting_set_id do %>
+        <% all_sets = @ai_sets ++ @user_sets %>
+        <% set = Enum.find(all_sets, fn s -> s.id == @deleting_set_id end) %>
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" phx-click="hide_delete_confirm">
+          <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl" phx-click="modal_content_click">
+            <h2 class="text-2xl font-bold text-red-600 mb-4">Delete Flashcard Set?</h2>
+            <p class="text-gray-700 mb-6">
+              Are you sure you want to delete "<strong>{set.name}</strong>"? 
+              This will permanently delete all {length(set.flashcards)} cards in this set.
+              This action cannot be undone.
+            </p>
+
+            <div class="flex gap-3">
+              <button type="button" phx-click="hide_delete_confirm" class="btn btn-ghost flex-1">
+                Cancel
+              </button>
+              <button phx-click="delete_set" phx-value-id={set.id} class="btn bg-red-600 hover:bg-red-700 text-white flex-1">
+                Delete Set
+              </button>
+            </div>
           </div>
         </div>
       <% end %>
