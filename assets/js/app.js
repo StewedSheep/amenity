@@ -47,77 +47,97 @@ Hooks.CaptureSelection = {
 
 Hooks.AccuracyPieChart = {
   mounted() {
-    const correctAnswers = parseInt(this.el.dataset.correct)
-    const incorrectAnswers = parseInt(this.el.dataset.incorrect)
+    const correctAnswers = parseInt(this.el.dataset.correct) || 0
+    const incorrectAnswers = parseInt(this.el.dataset.incorrect) || 0
+    
+    console.log('AccuracyPieChart mounted:', { correctAnswers, incorrectAnswers, el: this.el })
     
     // Only render if there's data
     if (correctAnswers === 0 && incorrectAnswers === 0) {
-      this.el.innerHTML = '<div class="text-center text-gray-500 py-8">No trivia games played yet. Start playing to see your stats!</div>'
+      console.log('No data to display')
       return
     }
 
-    const ctx = this.el.getContext('2d')
-    
-    this.chart = new Chart(ctx, {
-      type: 'pie',
-      data: {
-        labels: ['Correct Answers', 'Incorrect Answers'],
-        datasets: [{
-          data: [correctAnswers, incorrectAnswers],
-          backgroundColor: [
-            'rgba(34, 197, 94, 0.8)',  // Green for correct
-            'rgba(239, 68, 68, 0.8)'   // Red for incorrect
-          ],
-          borderColor: [
-            'rgba(34, 197, 94, 1)',
-            'rgba(239, 68, 68, 1)'
-          ],
-          borderWidth: 2
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-          legend: {
-            position: 'bottom',
-            labels: {
-              font: {
-                size: 14,
-                weight: 'bold'
-              },
-              padding: 20
-            }
+    // Small delay to ensure canvas is fully in DOM
+    setTimeout(() => {
+      try {
+        const ctx = this.el.getContext('2d')
+        
+        if (!ctx) {
+          console.error('Failed to get canvas context for element:', this.el)
+          return
+        }
+        
+        console.log('Creating chart with context:', ctx)
+        
+        this.chart = new Chart(ctx, {
+          type: 'pie',
+          data: {
+            labels: ['Correct Answers', 'Incorrect Answers'],
+            datasets: [{
+              data: [correctAnswers, incorrectAnswers],
+              backgroundColor: [
+                'rgba(34, 197, 94, 0.8)',  // Green for correct
+                'rgba(239, 68, 68, 0.8)'   // Red for incorrect
+              ],
+              borderColor: [
+                'rgba(34, 197, 94, 1)',
+                'rgba(239, 68, 68, 1)'
+              ],
+              borderWidth: 2
+            }]
           },
-          tooltip: {
-            enabled: true,
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            titleFont: {
-              size: 16,
-              weight: 'bold'
-            },
-            bodyFont: {
-              size: 14
-            },
-            padding: 12,
-            callbacks: {
-              label: function(context) {
-                const label = context.label || ''
-                const value = context.parsed || 0
-                const total = correctAnswers + incorrectAnswers
-                const percentage = ((value / total) * 100).toFixed(1)
-                return `${label}: ${value} (${percentage}%)`
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: {
+                  font: {
+                    size: 14,
+                    weight: 'bold'
+                  },
+                  padding: 20
+                }
+              },
+              tooltip: {
+                enabled: true,
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                titleFont: {
+                  size: 16,
+                  weight: 'bold'
+                },
+                bodyFont: {
+                  size: 14
+                },
+                padding: 12,
+                callbacks: {
+                  label: function(context) {
+                    const label = context.label || ''
+                    const value = context.parsed || 0
+                    const total = correctAnswers + incorrectAnswers
+                    const percentage = ((value / total) * 100).toFixed(1)
+                    return `${label}: ${value} (${percentage}%)`
+                  }
+                }
               }
             }
           }
-        }
+        })
+        
+        console.log('Chart created successfully:', this.chart)
+      } catch (error) {
+        console.error('Error creating chart:', error)
       }
-    })
+    }, 100)
   },
   
   updated() {
-    const correctAnswers = parseInt(this.el.dataset.correct)
-    const incorrectAnswers = parseInt(this.el.dataset.incorrect)
+    const correctAnswers = parseInt(this.el.dataset.correct) || 0
+    const incorrectAnswers = parseInt(this.el.dataset.incorrect) || 0
+    
+    console.log('AccuracyPieChart updated:', { correctAnswers, incorrectAnswers })
     
     if (this.chart) {
       this.chart.data.datasets[0].data = [correctAnswers, incorrectAnswers]
@@ -126,6 +146,7 @@ Hooks.AccuracyPieChart = {
   },
   
   destroyed() {
+    console.log('AccuracyPieChart destroyed')
     if (this.chart) {
       this.chart.destroy()
     }
