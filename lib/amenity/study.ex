@@ -39,6 +39,16 @@ defmodule Amenity.Study do
     end
   end
 
+  @doc """
+  Gets the user's master deck.
+  """
+  def get_master_deck(user_id) do
+    Repo.one(
+      from s in FlashcardSet,
+      where: s.user_id == ^user_id and s.name == "📚 Master Set"
+    )
+  end
+
   defp create_master_set(user_id) do
     {:ok, set} = create_flashcard_set(%{
       user_id: user_id,
@@ -108,6 +118,11 @@ defmodule Amenity.Study do
   end
 
   ## Flashcards
+
+  @doc """
+  Gets a single flashcard.
+  """
+  def get_flashcard!(id), do: Repo.get!(Flashcard, id)
 
   @doc """
   Creates a flashcard.

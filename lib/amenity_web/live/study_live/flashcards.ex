@@ -129,9 +129,15 @@ defmodule AmenityWeb.StudyLive.Flashcards do
           <!-- AI-Generated Sets Section -->
           <%= if @ai_sets != [] do %>
             <div class="mb-12">
-              <div class="flex items-center gap-3 mb-6">
-                <h2 class="text-2xl font-bold text-gray-800">🤖 AI-Generated Sets</h2>
-                <span class="badge badge-primary">{length(@ai_sets)}</span>
+              <div class="mb-6">
+                <div class="flex items-center gap-3 mb-2">
+                  <h2 class="text-2xl font-bold text-gray-800">🤖 AI-Generated Sets</h2>
+                  <span class="badge badge-primary">{length(@ai_sets)}</span>
+                </div>
+                <p class="text-sm text-amber-600 flex items-center gap-2">
+                  <span>⚠️</span>
+                  <span>AI-generated sets are automatically deleted after 24 hours</span>
+                </p>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <%= for set <- @ai_sets do %>

@@ -105,10 +105,12 @@ defmodule AmenityWeb.StudyLive.FlashcardSet do
       case Study.update_flashcard(socket.assigns.editing_card, %{front: front, back: back}) do
         {:ok, _card} ->
           flashcard_set = Study.get_flashcard_set!(socket.assigns.flashcard_set.id)
+          stats = Study.get_set_stats(socket.assigns.current_scope.user.id, socket.assigns.flashcard_set.id)
 
           {:noreply,
            socket
            |> assign(:flashcard_set, flashcard_set)
+           |> assign(:stats, stats)
            |> assign(:show_add_card_modal, false)
            |> put_flash(:info, "Card updated!")}
 
@@ -127,10 +129,12 @@ defmodule AmenityWeb.StudyLive.FlashcardSet do
       }) do
         {:ok, _card} ->
           flashcard_set = Study.get_flashcard_set!(socket.assigns.flashcard_set.id)
+          stats = Study.get_set_stats(socket.assigns.current_scope.user.id, socket.assigns.flashcard_set.id)
 
           {:noreply,
            socket
            |> assign(:flashcard_set, flashcard_set)
+           |> assign(:stats, stats)
            |> assign(:show_add_card_modal, false)
            |> put_flash(:info, "Card added!")}
 
@@ -146,10 +150,12 @@ defmodule AmenityWeb.StudyLive.FlashcardSet do
     case Study.delete_flashcard(card) do
       {:ok, _} ->
         flashcard_set = Study.get_flashcard_set!(socket.assigns.flashcard_set.id)
+        stats = Study.get_set_stats(socket.assigns.current_scope.user.id, socket.assigns.flashcard_set.id)
 
         {:noreply,
          socket
          |> assign(:flashcard_set, flashcard_set)
+         |> assign(:stats, stats)
          |> put_flash(:info, "Card deleted!")}
 
       {:error, _} ->
@@ -188,6 +194,14 @@ defmodule AmenityWeb.StudyLive.FlashcardSet do
               </div>
               <%= if @flashcard_set.description do %>
                 <p class="text-gray-600 text-lg">{@flashcard_set.description}</p>
+              <% end %>
+              <%= if @flashcard_set.ai_generated do %>
+                <div class="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p class="text-sm text-amber-700 flex items-center gap-2">
+                    <span>⚠️</span>
+                    <span>This AI-generated set will be automatically deleted after 24 hours</span>
+                  </p>
+                </div>
               <% end %>
             </div>
             <div class="flex gap-3">

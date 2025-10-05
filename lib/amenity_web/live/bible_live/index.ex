@@ -84,6 +84,32 @@ defmodule AmenityWeb.BibleLive.Index do
         
     <!-- Books grid -->
         <div :if={!@loading} class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <!-- Info Card -->
+          <div class="bg-gradient-to-br from-purple-100 via-blue-100 to-pink-100 rounded-3xl p-6 shadow-lg border-t-4 border-purple-400">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <span class="text-3xl">ℹ️</span>
+              Welcome to Bible Reader
+            </h2>
+            <div class="space-y-3 text-gray-700">
+              <div class="flex items-start gap-2">
+                <span class="text-xl">📖</span>
+                <p class="text-sm">Click any chapter to start reading</p>
+              </div>
+              <div class="flex items-start gap-2">
+                <span class="text-xl">🎨</span>
+                <p class="text-sm">Highlight verses and add notes</p>
+              </div>
+              <div class="flex items-start gap-2">
+                <span class="text-xl">🎴</span>
+                <p class="text-sm">Generate AI flashcards from chapters</p>
+              </div>
+              <div class="flex items-start gap-2">
+                <span class="text-xl">✓</span>
+                <p class="text-sm">Track your reading progress</p>
+              </div>
+            </div>
+          </div>
+
           <div
             :for={book <- @books}
             class="bg-white rounded-3xl p-6 shadow-lg hover:shadow-2xl transition-all transform hover:scale-105 border-t-4 border-gray-300"

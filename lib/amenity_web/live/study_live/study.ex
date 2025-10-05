@@ -15,11 +15,17 @@ defmodule AmenityWeb.StudyLive.Study do
        |> put_flash(:error, "You don't have access to this flashcard set")
        |> push_navigate(to: ~p"/study/flashcards")}
     else
-      # Get cards due for review
-      due_cards = Study.get_due_flashcards(user_id, String.to_integer(id))
+      # For AI-generated sets, show all cards; for regular sets, show only due cards
+      due_cards = if flashcard_set.ai_generated do
+        # Get all flashcards for AI-generated sets
+        flashcard_set.flashcards
+      else
+        # Get cards due for review for regular sets
+        Study.get_due_flashcards(user_id, String.to_integer(id))
+      end
       
-      # Get all user's flashcard sets for copying
-      all_sets = Study.list_flashcard_sets(user_id)
+      # Get master deck for AI-generated sets
+      master_deck = Study.get_master_deck(user_id)
 
       if due_cards == [] do
         {:ok,
@@ -30,53 +36,15 @@ defmodule AmenityWeb.StudyLive.Study do
         {:ok,
          socket
          |> assign(:flashcard_set, flashcard_set)
-         |> assign(:all_sets, all_sets)
          |> assign(:due_cards, due_cards)
+         |> assign(:master_deck, master_deck)
          |> assign(:current_index, 0)
          |> assign(:show_answer, false)
          |> assign(:cards_reviewed, 0)
          |> assign(:session_complete, false)
          |> assign(:show_edit_modal, false)
-         |> assign(:editing_card, nil)}
+         |> assign(:master_deck_card_ids, %{})}
       end
-    end
-  end
-
-  @impl true
-  def handle_event("show_answer", _params, socket) do
-    {:noreply, assign(socket, :show_answer, true)}
-  end
-
-  def handle_event("show_edit_modal", _params, socket) do
-    current_card = Enum.at(socket.assigns.due_cards, socket.assigns.current_index)
-    
-    {:noreply,
-     socket
-     |> assign(:show_edit_modal, true)
-     |> assign(:editing_card, current_card)}
-  end
-
-  def handle_event("hide_edit_modal", _params, socket) do
-    {:noreply, assign(socket, :show_edit_modal, false)}
-  end
-
-  def handle_event("update_card", %{"front" => front, "back" => back}, socket) do
-    case Study.update_flashcard(socket.assigns.editing_card, %{front: front, back: back}) do
-      {:ok, updated_card} ->
-        # Update the card in the due_cards list
-        updated_due_cards =
-          Enum.map(socket.assigns.due_cards, fn card ->
-            if card.id == updated_card.id, do: updated_card, else: card
-          end)
-
-        {:noreply,
-         socket
-         |> assign(:due_cards, updated_due_cards)
-         |> assign(:show_edit_modal, false)
-         |> put_flash(:info, "Card updated!")}
-
-      {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Could not update card")}
     end
   end
 
@@ -84,25 +52,69 @@ defmodule AmenityWeb.StudyLive.Study do
     {:noreply, socket}
   end
 
-  def handle_event("copy_to_set", %{"value" => set_id}, socket) when set_id != "" do
+  def handle_event("send_to_master", _params, socket) do
     current_card = Enum.at(socket.assigns.due_cards, socket.assigns.current_index)
+    master_deck = socket.assigns.master_deck
     
-    case Study.create_flashcard(%{
-      flashcard_set_id: String.to_integer(set_id),
-      front: current_card.front,
-      back: current_card.back,
-      position: 0
-    }) do
-      {:ok, _} ->
-        {:noreply, put_flash(socket, :info, "✨ Card copied to set!")}
-      
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Could not copy card")}
+    if is_nil(master_deck) do
+      # Create master deck if it doesn't exist
+      Study.ensure_master_set(socket.assigns.current_scope.user.id)
+      master_deck = Study.get_master_deck(socket.assigns.current_scope.user.id)
+    end
+    
+    if master_deck do
+      case Study.create_flashcard(%{
+        flashcard_set_id: master_deck.id,
+        front: current_card.front,
+        back: current_card.back,
+        position: 0
+      }) do
+        {:ok, created_card} ->
+          # Track the master deck card ID for this current card
+          card_ids = Map.put(socket.assigns.master_deck_card_ids, current_card.id, created_card.id)
+          
+          {:noreply,
+           socket
+           |> assign(:master_deck, master_deck)
+           |> assign(:master_deck_card_ids, card_ids)
+           |> put_flash(:info, "✨ Card sent to Master Deck!")}
+        
+        {:error, changeset} ->
+          {:noreply, put_flash(socket, :error, "Could not send card to Master Deck")}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "Master Deck not found")}
     end
   end
 
-  def handle_event("copy_to_set", _params, socket) do
-    {:noreply, socket}
+  def handle_event("remove_from_master", _params, socket) do
+    current_card = Enum.at(socket.assigns.due_cards, socket.assigns.current_index)
+    master_card_id = Map.get(socket.assigns.master_deck_card_ids, current_card.id)
+    
+    if master_card_id do
+      # Get the flashcard and delete it
+      flashcard = Study.get_flashcard!(master_card_id)
+      
+      case Study.delete_flashcard(flashcard) do
+        {:ok, _} ->
+          # Remove from tracking
+          card_ids = Map.delete(socket.assigns.master_deck_card_ids, current_card.id)
+          
+          {:noreply,
+           socket
+           |> assign(:master_deck_card_ids, card_ids)
+           |> put_flash(:info, "Card removed from Master Deck")}
+        
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Could not remove card")}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("show_answer", _params, socket) do
+    {:noreply, assign(socket, :show_answer, true)}
   end
 
   def handle_event("rate", %{"quality" => quality_str}, socket) do
@@ -192,18 +204,28 @@ defmodule AmenityWeb.StudyLive.Study do
           <div class="bg-white rounded-3xl shadow-2xl p-12 mb-8 min-h-[400px] flex flex-col justify-center relative">
             <!-- Action Buttons -->
             <div class="absolute top-4 right-4 flex gap-2">
-              <!-- Copy to Set Dropdown -->
-              <select
-                phx-change="copy_to_set"
-                class="select select-sm select-bordered"
-              >
-                <option value="">📋 Copy to...</option>
-                <%= for set <- @all_sets do %>
-                  <%= if set.id != @flashcard_set.id do %>
-                    <option value={set.id}>{set.name}</option>
-                  <% end %>
+              <!-- Send to Master Deck Button (only for AI-generated sets) -->
+              <%= if @flashcard_set.ai_generated do %>
+                <% current_card = Enum.at(@due_cards, @current_index) %>
+                <% card_sent = Map.has_key?(@master_deck_card_ids, current_card.id) %>
+                
+                <%= if card_sent do %>
+                  <button
+                    phx-click="remove_from_master"
+                    class="btn btn-sm btn-success group relative overflow-hidden"
+                  >
+                    <span class="group-hover:opacity-0 transition-opacity">✓ Sent to Master Deck</span>
+                    <span class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">🗑️ Remove</span>
+                  </button>
+                <% else %>
+                  <button
+                    phx-click="send_to_master"
+                    class="btn btn-sm btn-primary"
+                  >
+                    📚 Send to Master Deck
+                  </button>
                 <% end %>
-              </select>
+              <% end %>
               
               <!-- Edit Button -->
               <button
@@ -237,59 +259,72 @@ defmodule AmenityWeb.StudyLive.Study do
           
     <!-- Actions -->
           <%= if @show_answer do %>
-            <!-- Rating Buttons -->
-            <div class="text-center mb-4">
-              <p class="text-gray-600 mb-4">How well did you know this?</p>
-            </div>
-            <div class="grid grid-cols-3 gap-4">
-              <button
-                phx-click="rate"
-                phx-value-quality="1"
-                class="btn btn-lg bg-red-500 hover:bg-red-600 text-white rounded-2xl h-auto py-6"
-              >
-                <div>
-                  <div class="text-2xl mb-1">😰</div>
-                  <div class="font-bold">Again</div>
-                  <div class="text-xs opacity-80">1 day</div>
-                </div>
-              </button>
+            <%= if @flashcard_set.ai_generated do %>
+              <!-- Simple Next Button for AI-generated sets -->
+              <div class="text-center">
+                <button
+                  phx-click="rate"
+                  phx-value-quality="4"
+                  class="btn btn-primary btn-lg rounded-2xl px-12"
+                >
+                  Next Card →
+                </button>
+              </div>
+            <% else %>
+              <!-- Rating Buttons for user-created sets -->
+              <div class="text-center mb-4">
+                <p class="text-gray-600 mb-4">How well did you know this?</p>
+              </div>
+              <div class="grid grid-cols-3 gap-4">
+                <button
+                  phx-click="rate"
+                  phx-value-quality="1"
+                  class="btn btn-lg bg-red-500 hover:bg-red-600 text-white rounded-2xl h-auto py-6"
+                >
+                  <div>
+                    <div class="text-2xl mb-1">😰</div>
+                    <div class="font-bold">Again</div>
+                    <div class="text-xs opacity-80">5 min</div>
+                  </div>
+                </button>
 
-              <button
-                phx-click="rate"
-                phx-value-quality="3"
-                class="btn btn-lg bg-yellow-500 hover:bg-yellow-600 text-white rounded-2xl h-auto py-6"
-              >
-                <div>
-                  <div class="text-2xl mb-1">🤔</div>
-                  <div class="font-bold">Hard</div>
-                  <div class="text-xs opacity-80">&lt; 3 days</div>
-                </div>
-              </button>
+                <button
+                  phx-click="rate"
+                  phx-value-quality="3"
+                  class="btn btn-lg bg-yellow-500 hover:bg-yellow-600 text-white rounded-2xl h-auto py-6"
+                >
+                  <div>
+                    <div class="text-2xl mb-1">🤔</div>
+                    <div class="font-bold">Hard</div>
+                    <div class="text-xs opacity-80">1 day</div>
+                  </div>
+                </button>
 
-              <button
-                phx-click="rate"
-                phx-value-quality="4"
-                class="btn btn-lg bg-blue-500 hover:bg-blue-600 text-white rounded-2xl h-auto py-6"
-              >
-                <div>
-                  <div class="text-2xl mb-1">😊</div>
-                  <div class="font-bold">Good</div>
-                  <div class="text-xs opacity-80">&lt; 1 week</div>
-                </div>
-              </button>
+                <button
+                  phx-click="rate"
+                  phx-value-quality="4"
+                  class="btn btn-lg bg-blue-500 hover:bg-blue-600 text-white rounded-2xl h-auto py-6"
+                >
+                  <div>
+                    <div class="text-2xl mb-1">😊</div>
+                    <div class="font-bold">Good</div>
+                    <div class="text-xs opacity-80">3 days</div>
+                  </div>
+                </button>
 
-              <button
-                phx-click="rate"
-                phx-value-quality="5"
-                class="btn btn-lg bg-green-500 hover:bg-green-600 text-white rounded-2xl h-auto py-6 col-span-3"
-              >
-                <div>
-                  <div class="text-2xl mb-1">🎯</div>
-                  <div class="font-bold">Easy</div>
-                  <div class="text-xs opacity-80">&lt; 2 weeks</div>
-                </div>
-              </button>
-            </div>
+                <button
+                  phx-click="rate"
+                  phx-value-quality="5"
+                  class="btn btn-lg bg-green-500 hover:bg-green-600 text-white rounded-2xl h-auto py-6 col-span-3"
+                >
+                  <div>
+                    <div class="text-2xl mb-1">🎯</div>
+                    <div class="font-bold">Easy</div>
+                    <div class="text-xs opacity-80">1 week</div>
+                  </div>
+                </button>
+              </div>
+            <% end %>
           <% else %>
             <!-- Show Answer Button -->
             <div class="text-center">

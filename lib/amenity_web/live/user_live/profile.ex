@@ -220,29 +220,32 @@ defmodule AmenityWeb.UserLive.Profile do
               </div>
 
               <!-- Pie Chart -->
-              <div class="bg-white rounded-xl p-6 shadow-md">
-                <h4 class="text-lg font-bold text-gray-800 mb-4 text-center">Answer Accuracy</h4>
-                <div class="flex justify-center items-center">
-                  <div style="width: 300px; height: 300px;">
-                    <canvas
-                      id="accuracy-chart"
-                      phx-hook="AccuracyPieChart"
-                      data-correct={@trivia_stats.total_correct}
-                      data-incorrect={@trivia_stats.total_incorrect}
-                    >
-                    </canvas>
+              <%= if @trivia_stats.total_correct + @trivia_stats.total_incorrect > 0 do %>
+                <div class="bg-white rounded-xl p-6 shadow-md">
+                  <h4 class="text-lg font-bold text-gray-800 mb-4 text-center">Answer Accuracy</h4>
+                  <div class="flex justify-center items-center">
+                    <div style="width: 300px; height: 300px;">
+                      <canvas
+                        id="accuracy-chart"
+                        phx-hook="AccuracyPieChart"
+                        data-correct={@trivia_stats.total_correct}
+                        data-incorrect={@trivia_stats.total_incorrect}
+                      >
+                      </canvas>
+                    </div>
                   </div>
                 </div>
-              </div>
+              <% else %>
+                <div class="bg-white rounded-xl p-6 shadow-md">
+                  <h4 class="text-lg font-bold text-gray-800 mb-4 text-center">Answer Accuracy</h4>
+                  <div class="text-center text-gray-500 py-8">
+                    <div class="text-4xl mb-3">📊</div>
+                    <p>No trivia games played yet.</p>
+                    <p class="text-sm mt-2">Start playing to see your stats!</p>
+                  </div>
+                </div>
+              <% end %>
             </div>
-
-            <%= if @trivia_stats.games_played == 0 do %>
-              <div class="mt-6 text-center">
-                <.link navigate={~p"/study/trivia"} class="btn btn-primary btn-lg">
-                  🎮 Start Your First Trivia Battle!
-                </.link>
-              </div>
-            <% end %>
           </div>
         </div>
       </div>
