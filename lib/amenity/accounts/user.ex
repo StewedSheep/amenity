@@ -9,6 +9,11 @@ defmodule Amenity.Accounts.User do
     field :confirmed_at, :utc_datetime
     field :authenticated_at, :utc_datetime, virtual: true
     field :profile_picture_url, :string
+    
+    # Gamification
+    field :xp, :integer, default: 0
+    field :level, :integer, default: 1
+    field :achievements, {:array, :string}, default: []
 
     # Friendships
     has_many :friendships, Amenity.Accounts.Friendship

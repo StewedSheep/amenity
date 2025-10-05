@@ -3,6 +3,7 @@ defmodule Amenity.Trivia.GameServer do
   require Logger
 
   alias Amenity.Trivia
+  alias Amenity.Accounts
   alias Phoenix.PubSub
 
   @question_time 20_000  # 20 seconds per question
@@ -43,6 +44,7 @@ defmodule Amenity.Trivia.GameServer do
       current_question_index: 0,
       player_answers: %{},
       scores: %{},
+      player_stats: %{},  # Track correct/incorrect per player
       status: "waiting",
       player_ids: [],
       question_timer: nil,
@@ -167,8 +169,14 @@ defmodule Amenity.Trivia.GameServer do
     question = Enum.at(state.questions, state.current_question_index)
     correct_answer = question["correct_answer"]
 
-    # Calculate scores
-    new_scores = calculate_scores(state.player_answers, correct_answer, state.scores, state.question_start_time)
+    # Calculate scores and update stats
+    {new_scores, new_player_stats} = calculate_scores_and_stats(
+      state.player_answers, 
+      correct_answer, 
+      state.scores, 
+      state.player_stats,
+      state.question_start_time
+    )
 
     # Broadcast results
     broadcast(state.room_id, {:show_results, %{
@@ -182,6 +190,7 @@ defmodule Amenity.Trivia.GameServer do
     new_state = %{state | 
       player_answers: %{},
       scores: new_scores,
+      player_stats: new_player_stats,
       question_timer: nil
     }
 
@@ -199,6 +208,9 @@ defmodule Amenity.Trivia.GameServer do
 
   @impl true
   def handle_info(:end_game, state) do
+    # Save game stats for all players
+    save_game_stats(state.room_id, state.player_stats, state.scores)
+
     # Try to reload room and update status
     case Trivia.get_room(state.room_id) do
       nil ->
@@ -245,26 +257,90 @@ defmodule Amenity.Trivia.GameServer do
     Process.send_after(self(), :show_question, if(index == 0, do: 3000, else: @results_time))
   end
 
-  defp calculate_scores(player_answers, correct_answer, current_scores, question_start_time) do
-    Enum.reduce(player_answers, current_scores, fn {user_id, answer_data}, scores ->
-      current_score = Map.get(scores, user_id, 0)
+  defp calculate_scores_and_stats(player_answers, correct_answer, current_scores, current_stats, question_start_time) do
+    # Process answers and track stats
+    {new_scores, new_stats} = 
+      Enum.reduce(player_answers, {current_scores, current_stats}, fn {user_id, answer_data}, {scores, stats} ->
+        current_score = Map.get(scores, user_id, 0)
+        player_stat = Map.get(stats, user_id, %{correct: 0, incorrect: 0})
+        
+        if answer_data.answer == correct_answer do
+          # Award points based on speed: 500-1000 points
+          # Calculate elapsed time from when question started
+          elapsed_time = answer_data.timestamp - question_start_time
+          
+          # Faster answers get more points (500 bonus for instant, 0 bonus for 20 seconds)
+          # Clamp elapsed time to question duration
+          clamped_elapsed = min(elapsed_time, @question_time)
+          speed_bonus = div((@question_time - clamped_elapsed) * 500, @question_time)
+          points = 500 + speed_bonus
+          
+          new_scores = Map.put(scores, user_id, current_score + points)
+          new_stats = Map.put(stats, user_id, %{player_stat | correct: player_stat.correct + 1})
+          {new_scores, new_stats}
+        else
+          new_stats = Map.put(stats, user_id, %{player_stat | incorrect: player_stat.incorrect + 1})
+          {scores, new_stats}
+        end
+      end)
+    
+    {new_scores, new_stats}
+  end
+
+  defp save_game_stats(room_id, player_stats, scores) do
+    Logger.info("Saving game stats for room #{room_id}: #{inspect(player_stats)}")
+    
+    Enum.each(player_stats, fn {user_id, stats} ->
+      attrs = %{
+        user_id: user_id,
+        room_id: room_id,
+        correct_answers: stats.correct,
+        incorrect_answers: stats.incorrect,
+        total_score: Map.get(scores, user_id, 0)
+      }
       
-      if answer_data.answer == correct_answer do
-        # Award points based on speed: 500-1000 points
-        # Calculate elapsed time from when question started
-        elapsed_time = answer_data.timestamp - question_start_time
-        
-        # Faster answers get more points (500 bonus for instant, 0 bonus for 20 seconds)
-        # Clamp elapsed time to question duration
-        clamped_elapsed = min(elapsed_time, @question_time)
-        speed_bonus = div((@question_time - clamped_elapsed) * 500, @question_time)
-        points = 500 + speed_bonus
-        
-        Map.put(scores, user_id, current_score + points)
-      else
-        scores
+      case Trivia.create_game_stats(attrs) do
+        {:ok, game_stats} ->
+          Logger.info("Successfully saved stats for user #{user_id}: #{inspect(game_stats)}")
+          
+          # Award XP and check achievements
+          award_xp_and_achievements(user_id, stats, Map.get(scores, user_id, 0))
+          
+        {:error, changeset} ->
+          Logger.error("Failed to save stats for user #{user_id}: #{inspect(changeset.errors)}")
       end
     end)
+  end
+
+  defp award_xp_and_achievements(user_id, stats, score) do
+    try do
+      user = Accounts.get_user!(user_id)
+      
+      # Calculate XP: 10 XP per correct answer + bonus XP from score
+      xp_amount = (stats.correct * 10) + div(score, 100)
+      
+      Logger.info("Awarding #{xp_amount} XP to user #{user_id}")
+      
+      case Accounts.award_xp(user, xp_amount) do
+        {:ok, updated_user} ->
+          Logger.info("User #{user_id} now has #{updated_user.xp} XP (Level #{updated_user.level})")
+          
+          # Check for achievements
+          trivia_stats = Trivia.get_user_stats(user_id)
+          case Accounts.check_trivia_achievements(updated_user, trivia_stats) do
+            {:ok, user_with_achievements} ->
+              Logger.info("User #{user_id} achievements: #{inspect(user_with_achievements.achievements)}")
+            {:error, reason} ->
+              Logger.error("Failed to check achievements for user #{user_id}: #{inspect(reason)}")
+          end
+          
+        {:error, changeset} ->
+          Logger.error("Failed to award XP to user #{user_id}: #{inspect(changeset.errors)}")
+      end
+    rescue
+      Ecto.NoResultsError ->
+        Logger.error("User #{user_id} not found for XP award")
+    end
   end
 
   defp broadcast(room_id, message) do

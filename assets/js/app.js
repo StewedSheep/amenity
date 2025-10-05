@@ -24,6 +24,7 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/amenity"
 import topbar from "../vendor/topbar"
+import Chart from "chart.js/auto"
 
 // Custom hooks
 const Hooks = {}
@@ -41,6 +42,93 @@ Hooks.CaptureSelection = {
         "selected-text": selectedText
       })
     })
+  }
+}
+
+Hooks.AccuracyPieChart = {
+  mounted() {
+    const correctAnswers = parseInt(this.el.dataset.correct)
+    const incorrectAnswers = parseInt(this.el.dataset.incorrect)
+    
+    // Only render if there's data
+    if (correctAnswers === 0 && incorrectAnswers === 0) {
+      this.el.innerHTML = '<div class="text-center text-gray-500 py-8">No trivia games played yet. Start playing to see your stats!</div>'
+      return
+    }
+
+    const ctx = this.el.getContext('2d')
+    
+    this.chart = new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: ['Correct Answers', 'Incorrect Answers'],
+        datasets: [{
+          data: [correctAnswers, incorrectAnswers],
+          backgroundColor: [
+            'rgba(34, 197, 94, 0.8)',  // Green for correct
+            'rgba(239, 68, 68, 0.8)'   // Red for incorrect
+          ],
+          borderColor: [
+            'rgba(34, 197, 94, 1)',
+            'rgba(239, 68, 68, 1)'
+          ],
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              font: {
+                size: 14,
+                weight: 'bold'
+              },
+              padding: 20
+            }
+          },
+          tooltip: {
+            enabled: true,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            titleFont: {
+              size: 16,
+              weight: 'bold'
+            },
+            bodyFont: {
+              size: 14
+            },
+            padding: 12,
+            callbacks: {
+              label: function(context) {
+                const label = context.label || ''
+                const value = context.parsed || 0
+                const total = correctAnswers + incorrectAnswers
+                const percentage = ((value / total) * 100).toFixed(1)
+                return `${label}: ${value} (${percentage}%)`
+              }
+            }
+          }
+        }
+      }
+    })
+  },
+  
+  updated() {
+    const correctAnswers = parseInt(this.el.dataset.correct)
+    const incorrectAnswers = parseInt(this.el.dataset.incorrect)
+    
+    if (this.chart) {
+      this.chart.data.datasets[0].data = [correctAnswers, incorrectAnswers]
+      this.chart.update()
+    }
+  },
+  
+  destroyed() {
+    if (this.chart) {
+      this.chart.destroy()
+    }
   }
 }
 

@@ -497,4 +497,93 @@ defmodule Amenity.Accounts do
     )
     |> Repo.all()
   end
+
+  ## Gamification
+
+  @doc """
+  Awards XP to a user and checks for level up.
+  XP required for next level = current_level * 100
+  """
+  def award_xp(user, xp_amount) do
+    new_xp = user.xp + xp_amount
+    new_level = calculate_level(new_xp)
+    
+    user
+    |> Ecto.Changeset.change(%{xp: new_xp, level: new_level})
+    |> Repo.update()
+  end
+
+  @doc """
+  Calculates the level based on total XP.
+  Level formula: level = floor(sqrt(xp / 100)) + 1
+  """
+  def calculate_level(xp) do
+    floor(:math.sqrt(xp / 100)) + 1
+  end
+
+  @doc """
+  Unlocks an achievement for a user if they don't already have it.
+  """
+  def unlock_achievement(user, achievement_id) do
+    if achievement_id in user.achievements do
+      {:ok, user}
+    else
+      user
+      |> Ecto.Changeset.change(%{achievements: [achievement_id | user.achievements]})
+      |> Repo.update()
+    end
+  end
+
+  @doc """
+  Checks and unlocks trivia-related achievements based on stats.
+  """
+  def check_trivia_achievements(user, trivia_stats) do
+    achievements_to_unlock = []
+
+    # First Victory - Win your first game
+    achievements_to_unlock =
+      if trivia_stats.games_played >= 1 and "first_victory" not in user.achievements do
+        ["first_victory" | achievements_to_unlock]
+      else
+        achievements_to_unlock
+      end
+
+    # Perfect Game - Get all answers correct in a game
+    achievements_to_unlock =
+      if trivia_stats.total_correct >= 5 and trivia_stats.total_incorrect == 0 and 
+         "perfect_game" not in user.achievements do
+        ["perfect_game" | achievements_to_unlock]
+      else
+        achievements_to_unlock
+      end
+
+    # Trivia Master - Play 10 games
+    achievements_to_unlock =
+      if trivia_stats.games_played >= 10 and "trivia_master" not in user.achievements do
+        ["trivia_master" | achievements_to_unlock]
+      else
+        achievements_to_unlock
+      end
+
+    # Scholar - Get 50 correct answers
+    achievements_to_unlock =
+      if trivia_stats.total_correct >= 50 and "scholar" not in user.achievements do
+        ["scholar" | achievements_to_unlock]
+      else
+        achievements_to_unlock
+      end
+
+    # High Scorer - Reach 5000 total score
+    achievements_to_unlock =
+      if trivia_stats.total_score >= 5000 and "high_scorer" not in user.achievements do
+        ["high_scorer" | achievements_to_unlock]
+      else
+        achievements_to_unlock
+      end
+
+    # Unlock all achievements
+    Enum.reduce(achievements_to_unlock, {:ok, user}, fn achievement, {:ok, current_user} ->
+      unlock_achievement(current_user, achievement)
+    end)
+  end
 end

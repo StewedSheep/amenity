@@ -6,6 +6,7 @@ defmodule Amenity.Trivia do
   import Ecto.Query
   alias Amenity.Repo
   alias Amenity.Trivia.Room
+  alias Amenity.Trivia.GameStats
 
   @doc """
   Lists all active trivia rooms.
@@ -133,4 +134,51 @@ defmodule Amenity.Trivia do
       end
     end
   end
+
+  @doc """
+  Creates game stats for a user after a trivia game.
+  """
+  def create_game_stats(attrs \\ %{}) do
+    %GameStats{}
+    |> GameStats.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Gets aggregated trivia statistics for a user.
+  Returns a map with total correct and incorrect answers.
+  """
+  def get_user_stats(user_id) do
+    require Logger
+    
+    stats = 
+      GameStats
+      |> where([gs], gs.user_id == ^user_id)
+      |> select([gs], %{
+        total_correct: sum(gs.correct_answers),
+        total_incorrect: sum(gs.incorrect_answers),
+        total_score: sum(gs.total_score),
+        games_played: count(gs.id)
+      })
+      |> Repo.one()
+
+    Logger.info("Raw stats from DB for user #{user_id}: #{inspect(stats)}")
+
+    # Handle case where user has no stats yet or aggregates return nil
+    # sum() returns Decimal, count() returns integer
+    result = %{
+      total_correct: to_integer_safe(stats.total_correct),
+      total_incorrect: to_integer_safe(stats.total_incorrect),
+      total_score: to_integer_safe(stats.total_score),
+      games_played: stats.games_played || 0
+    }
+    
+    Logger.info("Processed stats for user #{user_id}: #{inspect(result)}")
+    result
+  end
+
+  # Helper to safely convert Decimal or nil to integer
+  defp to_integer_safe(nil), do: 0
+  defp to_integer_safe(value) when is_integer(value), do: value
+  defp to_integer_safe(%Decimal{} = value), do: Decimal.to_integer(value)
 end
